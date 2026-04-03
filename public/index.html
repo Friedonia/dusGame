@@ -61,13 +61,53 @@
                 <input type="checkbox" id="global-radar-toggle" onchange="saveZones()"> 📡 Live-Standorte (Radar)
             </label>
             
+            <label class="toggle-label" style="color: #00ffcc; font-size: 15px; margin-top: 10px;">
+                <input type="checkbox" id="global-shop-toggle" onchange="saveZones()" checked> 🛒 Shop & Coins aktiv
+            </label>
+
             <label class="toggle-label" style="color: #ff4444; font-size: 15px; margin-top: 15px; font-weight: bold;">
                 <input type="checkbox" id="global-freeze-toggle" onchange="toggleGameFreeze()"> 🛑 Spiel pausieren (NFCs aus)
             </label>
+
+            <hr style="border-color: #333; margin: 20px 0;">
+
             <label style="font-size: 13px; color: #ccc;">Spieler Cooldown (Minuten):</label>
             <div style="display:flex; gap:5px; margin-bottom: 15px; margin-top: 5px;">
                 <input type="number" id="cooldown-input" style="width: 60px; background:#333; color:white; border:1px solid #555; padding:5px; border-radius:3px;" value="0" onchange="saveZones()">
                 <span style="font-size: 12px; color: #888; align-self: center;">(0 = Deaktiviert)</span>
+            </div>
+
+
+        <label style="font-size: 13px; color: #ccc; display:block; margin-top:15px;">🏦 Bank-Verwaltung (Live):</label>
+            <label style="font-size: 13px; color: #ccc; display:block; margin-top:10px;">Coin-Ausschüttung (alle X Min):</label>
+            <div style="display:flex; gap:5px; margin-bottom: 15px; margin-top: 5px;">
+                <input type="number" id="payout-interval-input" style="width: 60px; background:#333; color:white; border:1px solid #555; padding:5px; border-radius:3px;" value="45" onchange="saveZones()">
+                <span style="font-size: 12px; color: #888; align-self: center;">Minuten</span>
+            </div>
+        
+            <div style="background: #222; padding: 10px; border-radius: 5px; margin-top: 5px; border: 1px solid #444;">
+                
+                <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 12px; font-weight: bold; background: #111; padding: 8px; border-radius: 4px; border: 1px solid #333;">
+                    <span style="color: #ff3333;">🔴 <span id="admin-coins-rot">0</span></span>
+                    <span style="color: #3366ff;">🔵 <span id="admin-coins-blau">0</span></span>
+                    <span style="color: #33ff33;">🟢 <span id="admin-coins-gruen">0</span></span>
+                    <span style="color: #ffcc00;">🟡 <span id="admin-coins-gelb">0</span></span>
+                </div>
+
+                <div style="display:flex; gap:5px; margin-bottom: 8px;">
+                    <select id="bank-team-select" style="background:#333; color:white; border:1px solid #555; padding:5px; border-radius:3px; flex: 1;">
+                        <option value="rot">🔴 Team Rot</option>
+                        <option value="blau">🔵 Team Blau</option>
+                        <option value="gruen">🟢 Team Grün</option>
+                        <option value="gelb">🟡 Team Gelb</option>
+                    </select>
+                    <input type="number" id="bank-amount" value="10" style="width: 60px; background:#333; color:white; border:1px solid #555; padding:5px; border-radius:3px; text-align: center;">
+                </div>
+                <div style="display:flex; gap:5px;">
+                    <button onclick="manageCoins('add')" style="flex:1; padding: 8px 5px; background:#33ff33; color:black; border:none; border-radius:3px; font-weight:bold; cursor:pointer; font-size:12px;">+ Geben</button>
+                    <button onclick="manageCoins('sub')" style="flex:1; padding: 8px 5px; background:#ff3333; color:white; border:none; border-radius:3px; font-weight:bold; cursor:pointer; font-size:12px;">- Abziehen</button>
+                </div>
+                <button onclick="manageCoins('reset_all')" style="width:100%; margin-top:8px; padding: 8px 5px; background:#f38c05; color:black; border:none; border-radius:3px; font-weight:bold; cursor:pointer; font-size:12px;">💸 Alle Kassen auf 0 setzen</button>
             </div>
         </div>
     </div>

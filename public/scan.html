@@ -2,144 +2,32 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zone Scan</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Zonen Terminal</title>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #1e1e1e; color: white; text-align: center; padding: 50px 20px; margin: 0; }
-        #message { font-size: 24px; font-weight: bold; margin-bottom: 20px; line-height: 1.4; }
-        .btn-back { padding: 15px 30px; font-size: 18px; background-color: #555; color: white; border: none; border-radius: 8px; cursor: pointer; text-decoration: none; display: inline-block; margin-top: 20px;}
-        .code-display { font-family: monospace; color: #00ffcc; background: #333; padding: 4px 8px; border-radius: 4px; }
+        body { margin: 0; padding: 20px; font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #0a0a0a; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
+        
+        #terminal { background: rgba(20, 20, 25, 0.85); backdrop-filter: blur(10px); border-radius: 12px; padding: 25px; width: 100%; max-width: 400px; border: 2px solid #444; box-shadow: 0 10px 30px rgba(0,0,0,0.8); text-align: center; transition: border-color 0.3s;}
+        
+        h2 { margin-top: 0; font-size: 22px; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .btn { width: 100%; padding: 15px; margin-bottom: 12px; border: none; border-radius: 8px; font-weight: bold; font-size: 15px; cursor: pointer; transition: transform 0.1s, filter 0.2s; }
+        .btn:active { transform: scale(0.96); }
+        .btn:hover { filter: brightness(1.2); }
+        
+        .btn-back { background: #333; color: white; margin-top: 20px; border: 1px solid #555; }
+        
+        #message { margin: 20px 0; font-size: 15px; line-height: 1.5; }
     </style>
 </head>
 <body>
 
-    <div id="message">🔄 Verbinde zum Server...</div>
-    <a href="/player.html" class="btn-back">Zurück zum Radar</a>
+    <div id="terminal">
+        <h2>📡 Terminal</h2>
+        <div id="message">Verbindung wird aufgebaut...</div>
+        <button id="btn-return" class="btn btn-back" style="display:none;" onclick="returnToHQ()">Zurück zum Radar</button>
+    </div>
 
-    <script>
-        const messageDiv = document.getElementById('message');
-        
-        // Welches Team hat der Spieler?
-        const team = localStorage.getItem('team');
-        
-        // ---------------------------------------------------------
-        // DER HACK FÜR DIE RAUTE (#) IM LINK
-        // ---------------------------------------------------------
-        let scannedCode = null;
-        const rawUrl = window.location.href; // Liest den absolut rohen Link aus
-        const urlMatch = rawUrl.match(/code=([^&]+)/); // Zieht alles nach "code=" heraus
-        
-        if (urlMatch) {
-            // dekodiert den Code sauber (falls Safari beim Scannen ein %23 aus dem # macht)
-            scannedCode = decodeURIComponent(urlMatch[1]); 
-        }
-        // ---------------------------------------------------------
-
-        if (!team) {
-            messageDiv.innerHTML = "❌ Fehler: Du hast noch kein Team gewählt!<br><br>Gehe zurück und wähle ein Team.";
-        } else if (!scannedCode) {
-            messageDiv.innerHTML = "❌ Fehler: Ungültiger NFC-Tag.<br><span style='font-size: 16px; color: #aaa;'>Es wurde kein Code im Link gefunden.</span>";
-        } else {
-            // Team-Farben zuordnen (exakt wie im Admin-Board)
-            const teamColors = {
-                'rot': '#ff3333',
-                'blau': '#3366ff',
-                'gruen': '#33ff33',
-                'gelb': '#ffcc00'
-            };
-            const newColor = teamColors[team];
-
-           // 1. Zonen vom Server holen
-            fetch('/api/zones')
-                .then(res => res.json())
-                .then(data => {
-                    
-                    // 🛑 SPIEL PAUSIERT CHECK
-                    if (data.gameSettings && data.gameSettings.gamePaused) {
-                        messageDiv.innerHTML = "🛑 Fehler: Das Spiel ist momentan pausiert!";
-                        return;
-                    }
-
-                    // ⏳ COOLDOWN CHECK (Sicherheit)
-                    let cooldownMins = data.gameSettings && data.gameSettings.playerCooldown ? parseInt(data.gameSettings.playerCooldown) : 0;
-                    let lastScan = localStorage.getItem('lastScanTime') || 0;
-                    let now = Date.now();
-                    
-                    if (cooldownMins > 0 && (now - lastScan) < (cooldownMins * 60000)) {
-                        let leftMins = Math.ceil(((cooldownMins * 60000) - (now - lastScan)) / 60000);
-                        messageDiv.innerHTML = `⏳ COOLDOWN AKTIV!<br><br>Dein Scanner überhitzt. Du kannst erst in ca. <b>${leftMins} Minute(n)</b> wieder scannen.`;
-                        return;
-                    }
-
-                    let targetZone = null;
-
-                    // 2. Zone finden
-                    if (data.features) {
-                        targetZone = data.features.find(f => f.properties.type === "zone" && f.properties.code === scannedCode);
-                    }
-
-                    if (!targetZone) {
-                        messageDiv.innerHTML = `❌ Fehler: Die Zone mit dem Code <br><br><span class="code-display">${scannedCode}</span><br><br> existiert nicht.`;
-                        return;
-                    }
-                    if (targetZone.properties.locked) {
-                        messageDiv.innerHTML = "🔒 Fehler: Diese Zone ist momentan durch den Admin gesperrt!";
-                        return;
-                    }
-
-                    // ⚔️ DAS NEUE KAMPF- & LEVEL-SYSTEM ⚔️
-                    let props = targetZone.properties;
-                    if (!props.level) props.level = 1; // Fallback für alte Zonen
-                    let isGray = (props.color === "#808080" || !props.color);
-
-                    let resultHTML = "";
-
-                    if (props.color === newColor) {
-                        // VERSTÄRKEN (Eigenes Team)
-                        if (props.level < 3) {
-                            props.level += 1;
-                            resultHTML = `🛡️ ZONE VERSTÄRKT! 🛡️<br><br>Die Zone ist jetzt auf <b>Level ${props.level}</b>.<br>Gegner müssen sie nun ${props.level}x scannen!`;
-                        } else {
-                            resultHTML = `✅ MAXIMAL-LEVEL! ✅<br><br>Diese Zone ist bereits Level 3 und kann nicht weiter verstärkt werden.`;
-                        }
-                    } else if (isGray) {
-                        // EINNEHMEN (Neutrale/Graue Zone)
-                        props.color = newColor;
-                        props.level = 1;
-                        resultHTML = `🎉 ZONE EINGENOMMEN! 🎉<br><br>Gute Arbeit, Team ${team.toUpperCase()}!<br>Zone ist auf Level 1.`;
-                    } else {
-                        // ANGREIFEN (Feindliche Zone)
-                        props.level -= 1;
-                        if (props.level <= 0) {
-                            // Neutralisiert
-                            props.color = "#808080";
-                            props.level = 0;
-                            resultHTML = `💥 FEINDLICHE ZONE NEUTRALISIERT! 💥<br><br>Die Zone ist jetzt wieder Grau.<br>Noch ein Scan eures Teams, um sie komplett zu erobern!`;
-                        } else {
-                            // Geschwächt
-                            resultHTML = `⚔️ FEINDLICHE ZONE GESCHWÄCHT! ⚔️<br><br>Gute Arbeit! Die Verteidigung ist gesunken.<br>Die Zone ist nur noch <b>Level ${props.level}</b>.`;
-                        }
-                    }
-
-                    // 3. Geänderte Zonen zurück an den Server senden
-                    fetch('/api/zones', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(data)
-                    })
-                    .then(() => {
-                        // Spieler Cooldown-Stempel verpassen!
-                        localStorage.setItem('lastScanTime', Date.now());
-
-                        messageDiv.innerHTML = resultHTML;
-                        document.body.style.backgroundColor = props.color === "#808080" ? "#333" : props.color;
-                        if(team === 'gruen' || team === 'gelb') document.body.style.color = "black";
-                    })
-                    .catch(err => {
-                        messageDiv.innerHTML = "❌ Fehler beim Speichern auf dem Server.";
-                    });
-                });
-        }
-    </script>
+    <script src="scan.js"></script>
 </body>
 </html>

@@ -5,60 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Spieler Radar</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <style>
-        body { margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #121212; color: white; overflow: hidden; }
-        
-        #map { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
-        .leaflet-tile-pane { filter: grayscale(100%) brightness(290%) contrast(100%); }
-        
-        #hud-wrapper { position: absolute; top: 10px; left: 10px; right: 10px; z-index: 1000; background: rgba(20,20,20,0.9); border-radius: 10px; backdrop-filter: blur(5px); border: 1px solid #444; box-shadow: 0 4px 15px rgba(0,0,0,0.5); overflow: hidden; }
-        
-        #hud-content-wrapper { transition: max-height 0.3s ease-in-out; max-height: 500px; overflow: hidden; }
-        #hud-content-wrapper.collapsed { max-height: 0px; } 
-        
-        #hud-content { padding: 15px; }
-        h3 { margin: 0 0 10px 0; font-size: 16px; text-align: center; }
-        
-        .team-selector { display: flex; gap: 5px; justify-content: center; }
-        .team-btn { flex: 1; padding: 10px 5px; font-size: 14px; font-weight: bold; border: none; border-radius: 5px; cursor: pointer; color: white; }
-        #btn-rot { background-color: #ca2727; }
-        #btn-blau { background-color: #3366ff; }
-        #btn-gruen { background-color: #33ff33; color: black; }
-        #btn-gelb { background-color: #f38c05; color: black; }
-        .active-team { border: 2px solid white; transform: scale(1.05); }
-
-        #status { margin-top: 10px; font-size: 12px; color: #aaa; text-align: center; }
-
-        #manual-scan { margin-top: 15px; padding-top: 15px; border-top: 1px solid #444; display: none; }
-        #manual-scan p { font-size: 12px; color: #aaa; margin: 0 0 8px 0; text-align: center; }
-        .input-group { display: flex; gap: 8px; }
-        #manual-code-input { flex: 1; padding: 10px; border-radius: 5px; border: 1px solid #555; background: #222; color: #b0b0b0; font-family: monospace; font-size: 16px; text-transform: uppercase; text-align: center; }
-        .btn-send { padding: 10px 15px; background: #555; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
-
-        #toggle-hud-btn { display: block; width: 100%; background: #333; color: #aaa; border: none; padding: 10px; font-size: 13px; cursor: pointer; text-align: center; border-top: 1px solid #444; }
-        #toggle-hud-btn:hover { background: #444; color: white; }
-
-        /* 🎙 NEU: TIMER & ANNOUNCEMENTS */
-        #game-timer { display: none; position: absolute; top: 70px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); border: 2px solid #ff3333; color: white; font-size: 24px; font-weight: bold; font-family: monospace; padding: 5px 15px; border-radius: 8px; z-index: 1001; box-shadow: 0 0 10px rgba(255, 51, 51, 0.5); }
-        #announcement-banner { display: none; position: absolute; top: 30%; left: 10%; right: 10%; background: rgba(200, 30, 30, 0.95); color: white; text-align: center; font-size: 18px; font-weight: bold; padding: 20px; border-radius: 10px; z-index: 2005; box-shadow: 0 0 20px black; border: 2px solid white; animation: pulse 2s infinite; cursor: pointer; }
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.02); } 100% { transform: scale(1); } }
-
-        /* CHAT */
-        #chat-widget { position: absolute; bottom: 20px; right: 10px; z-index: 2000; width: 300px; background: rgba(30,30,30,0.95); border-radius: 10px; border: 1px solid #555; box-shadow: 0 4px 15px rgba(0,0,0,0.8); display: flex; flex-direction: column; transition: transform 0.3s ease, height 0.3s ease; height: 350px; transform: translateY(calc(100% - 40px)); }
-        #chat-widget.open { transform: translateY(0); }
-        
-        #chat-header { background: #444; color: white; padding: 10px; text-align: center; font-weight: bold; cursor: pointer; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: center; }
-        #chat-header span { background: #ff3333; color: white; border-radius: 10px; padding: 2px 8px; font-size: 11px; display: none; } 
-        
-        #chat-messages { flex: 1; padding: 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
-        .msg { padding: 8px; border-radius: 8px; max-width: 85%; line-height: 1.3; }
-        .msg.self { background: #0066ff; align-self: flex-end; color: white; }
-        .msg.admin { background: #ff8800; align-self: flex-start; color: black; font-weight: bold; }
-        
-        #chat-input-area { display: flex; padding: 8px; background: #222; border-radius: 0 0 10px 10px; border-top: 1px solid #555;}
-        #chat-message-input { flex: 1; padding: 8px; border-radius: 5px; border: 1px solid #444; background: #111; color: white; }
-        #chat-send-btn { background: #00ffcc; color: black; border: none; padding: 8px 12px; margin-left: 5px; border-radius: 5px; cursor: pointer; font-weight: bold;}
-    </style>
+    <link rel="stylesheet" href="player.css" />
 </head>
 <body>
 
@@ -66,236 +13,51 @@
     <div id="announcement-banner" onclick="this.style.display='none'">⚠️ ACHTUNG: Nachricht!</div>
 
     <div id="hud-wrapper">
+        <div id="hud-header">🛡️ HQ Verbindung...</div>
         <div id="hud-content-wrapper">
             <div id="hud-content">
-                <h3 id="hud-title">Wähle dein Team</h3>
-                <div class="team-selector">
-                    <button id="btn-rot" class="team-btn" onclick="setTeam('rot')">Rot</button>
-                    <button id="btn-blau" class="team-btn" onclick="setTeam('blau')">Blau</button>
-                    <button id="btn-gruen" class="team-btn" onclick="setTeam('gruen')">Grün</button>
-                    <button id="btn-gelb" class="team-btn" onclick="setTeam('gelb')">Gelb</button>
-                </div>
-                <div id="status">Warte auf Teamauswahl...</div>
 
-                <div id="manual-scan">
-                    <p>NFC kaputt? Code manuell eingeben:</p>
-                    <div class="input-group">
-                        <input type="text" id="manual-code-input" placeholder="z.B. TR#1234#56" autocomplete="off">
-                        <button class="btn-send" onclick="submitManualCode()">Senden</button>
+                <div id="team-selector-container">
+                    <h3 style="margin-top:0; color:#aaa; font-size: 14px;">Wähle dein Team:</h3>
+                    <div style="display: flex; gap: 8px; margin-bottom: 5px;">
+                        <button class="btn-send" style="background:#ff3333; color:white; flex:1;" onclick="setTeam('rot')">Rot</button>
+                        <button class="btn-send" style="background:#3366ff; color:white; flex:1;" onclick="setTeam('blau')">Blau</button>
+                    </div>
+                    <div style="display: flex; gap: 8px; margin-bottom: 15px;">
+                        <button class="btn-send" style="background:#33ff33; color:black; flex:1;" onclick="setTeam('gruen')">Grün</button>
+                        <button class="btn-send" style="background:#ffcc00; color:black; flex:1;" onclick="setTeam('gelb')">Gelb</button>
                     </div>
                 </div>
+
+                <div id="player-controls" style="display: none;">
+                    <div id="coin-display">💰 Kasse: <span id="team-coins-val">0</span> Coins</div>
+                    <div id="status">Warte auf GPS...</div>
+                    <div id="manual-scan">
+                        <p>NFC defekt? Code hier tippen:</p>
+                        <div class="input-group">
+                            <input type="text" id="manual-code-input" placeholder="TR#1234#56" autocomplete="off">
+                            <button class="btn-send" onclick="submitManualCode()">Senden</button>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
-        <button id="toggle-hud-btn" onclick="toggleHud()">▲ Einklappen</button>
+        <button id="toggle-hud-btn" onclick="toggleHud()" style="display:none;">▲ Einklappen ▲</button>
     </div>
 
-    <div id="chat-widget">
-        <div id="chat-header" onclick="toggleChat()">
-            💬 Funkgerät (Admin) <span id="chat-badge">0</span>
-        </div>
-        <div id="chat-messages">
-            <div class="msg admin">System: Chat bereit. Warte auf Admin...</div>
-        </div>
+    <div id="chat-widget" style="display:none;">
+        <div id="chat-header" onclick="toggleChat()">💬 Funkgerät (Admin) <span id="chat-badge">0</span></div>
+        <div id="chat-messages"><div class="msg admin">System: Verschlüsselte Verbindung steht.</div></div>
         <div id="chat-input-area">
-            <input type="text" id="chat-message-input" placeholder="Nachricht an Admin...">
-            <button id="chat-send-btn" onclick="sendChat()">Senden</button>
+            <input type="text" id="chat-message-input" placeholder="Nachricht...">
+            <button id="chat-send-btn" onclick="sendChat()">➤</button>
         </div>
     </div>
 
     <div id="map"></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        let hudCollapsed = false;
-        function toggleHud() {
-            const content = document.getElementById('hud-content-wrapper');
-            const btn = document.getElementById('toggle-hud-btn');
-            hudCollapsed = !hudCollapsed;
-            
-            if (hudCollapsed) {
-                content.classList.add('collapsed');
-                btn.innerHTML = "▼ Menü & Code-Eingabe ausklappen";
-            } else {
-                content.classList.remove('collapsed');
-                btn.innerHTML = "▲ Einklappen";
-            }
-        }
-
-        let chatOpen = false;
-        function toggleChat() {
-            const widget = document.getElementById('chat-widget');
-            chatOpen = !chatOpen;
-            if (chatOpen) {
-                widget.classList.add('open');
-                document.getElementById('chat-badge').style.display = 'none'; 
-            } else {
-                widget.classList.remove('open');
-            }
-        }
-
-        function sendChat() {
-            const input = document.getElementById('chat-message-input');
-            const msg = input.value.trim();
-            const team = localStorage.getItem('team');
-            if (!msg || !team) return;
-            
-            const msgDiv = document.createElement('div');
-            msgDiv.className = 'msg self';
-            msgDiv.innerText = msg;
-            document.getElementById('chat-messages').appendChild(msgDiv);
-            document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;
-            input.value = '';
-
-            fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sender: playerId, team: team, message: msg, type: 'player' }) }).catch(err => err);
-        }
-
-        var map = L.map('map', { zoomControl: false }).setView([51.2277, 6.7735], 13.2);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
-
-        var zoneLayer = L.layerGroup().addTo(map);
-        var playerLayer = L.layerGroup().addTo(map);
-
-        var nfcIcon = L.divIcon({ className: 'custom-nfc-marker', html: '<div style="background-color: #ff8800; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 8px #ff8800;"></div>', iconSize: [20, 20], iconAnchor: [10, 10] });
-
-        let lastAnnouncementTime = 0; // Merkt sich, wann das letzte Announcement gezeigt wurde
-        let timerInterval = null;
-
-        let globalCooldownMins = 0; // Merkt sich das Admin-Setting
-
-        function updateMap() {
-            fetch('/api/zones').then(res => res.json()).then(data => {
-                
-                // 🎙 RUNDFUNK & TIMER ... (Dein bisheriger Code bleibt hier gleich) ...
-                if (data.gameSettings && data.gameSettings.announcement) { /* ... */ }
-                if (data.gameSettings && data.gameSettings.endTime) { /* ... */ } else { /* ... */ }
-                
-                // Cooldown Wert speichern
-                globalCooldownMins = data.gameSettings && data.gameSettings.playerCooldown ? parseInt(data.gameSettings.playerCooldown) : 0;
-
-                zoneLayer.clearLayers();
-                L.geoJSON(data, {
-                    filter: function(f) { 
-                        if (f.properties.type === "nfc-tag") {
-                            if (data.gameSettings && data.gameSettings.gamePaused) return false;
-                            return f.properties.visibleToPlayers === true;
-                        }
-                        if (f.properties.type === "transit-line") return false;
-                        return true; 
-                    },
-                    pointToLayer: function (f, latlng) {
-                        let tagName = f.properties.name || "NFC Tag";
-                        if (f.properties.type === "nfc-tag") return L.marker(latlng, { icon: nfcIcon }).bindPopup(`<b>${tagName}</b>`);
-                    },
-                    style: function (f) { 
-                        if (f.properties.locked) {
-                            return { color: '#ffffff', fillColor: '#222222', fillOpacity: 0.8, dashArray: '10, 10', interactive: true };
-                        }
-                        
-                        // 🎨 DYNAMISCHES LEVEL-DESIGN AUF DER SPIELERKARTE
-                        let op = 0.4;
-                        if(f.properties.level === 2) op = 0.65;
-                        if(f.properties.level === 3) op = 0.9;
-                        
-                        return { color: f.properties.color, fillColor: f.properties.color, fillOpacity: op, interactive: true }; 
-                    }
-                }).addTo(zoneLayer);
-
-                if (data.gameSettings && data.gameSettings.showPlayers === true) fetchPlayers();
-                else playerLayer.clearLayers(); 
-            });
-        }
-
-        // ⏳ COOLDOWN ANZEIGE FÜRS HUD
-        setInterval(() => {
-            if (globalCooldownMins > 0) {
-                let lastScan = localStorage.getItem('lastScanTime') || 0;
-                let now = Date.now();
-                let diff = (globalCooldownMins * 60000) - (now - lastScan);
-                
-                let submitBtn = document.querySelector('.btn-send');
-                let manualInput = document.getElementById('manual-code-input');
-
-                if (diff > 0) {
-                    let leftSecs = Math.ceil(diff / 1000);
-                    let m = Math.floor(leftSecs / 60);
-                    let s = leftSecs % 60;
-                    document.getElementById('status').innerHTML = `⏳ Scanner blockiert! Bereit in: <b>${m}:${s < 10 ? '0':''}${s}</b>`;
-                    document.getElementById('status').style.color = "#ff8800";
-                    
-                    // Manuelle Eingabe blockieren
-                    if(submitBtn) { submitBtn.disabled = true; submitBtn.style.background = "#333"; }
-                    if(manualInput) { manualInput.disabled = true; }
-                } else {
-                    document.getElementById('status').innerHTML = "✅ Scanner bereit!";
-                    document.getElementById('status').style.color = "#33ff33";
-                    
-                    // Manuelle Eingabe freigeben
-                    if(submitBtn) { submitBtn.disabled = false; submitBtn.style.background = "#555"; }
-                    if(manualInput) { manualInput.disabled = false; }
-                }
-            } else {
-                document.getElementById('status').innerHTML = "📍 GPS aktiv (Kein Cooldown)";
-                document.getElementById('status').style.color = "#aaa";
-            }
-        }, 1000);
-
-        function fetchPlayers() {
-            fetch('/api/location').then(res => res.json()).then(players => {
-                playerLayer.clearLayers();
-                for (let id in players) {
-                    const p = players[id];
-                    if(id === playerId) continue; 
-                    let playerColor = p.team === 'rot' ? '#ca2727' : (p.team === 'blau' ? '#3366ff' : (p.team === 'gruen' ? '#33ff33' : '#f38c05'));
-                    L.circleMarker([p.lat, p.lng], { radius: 6, fillColor: playerColor, color: "#ffffff", weight: 2, fillOpacity: 1 }).addTo(playerLayer);
-                }
-            }).catch(err => err);
-        }
-
-        setInterval(updateMap, 3000); // 🛠 Schnelleres Update (3 Sek), damit Timer & Announcements flüssiger wirken
-        updateMap();
-
-        if (!localStorage.getItem('playerId')) localStorage.setItem('playerId', 'Player_' + Math.floor(Math.random() * 1000));
-        const playerId = localStorage.getItem('playerId');
-
-        const savedTeam = localStorage.getItem('team');
-        if (savedTeam) { highlightButton(savedTeam); startGPS(); }
-
-        function setTeam(team) {
-            localStorage.setItem('team', team);
-            highlightButton(team);
-            startGPS();
-            setTimeout(() => { if(!hudCollapsed) toggleHud(); }, 1500);
-        }
-
-        function highlightButton(team) {
-            document.querySelectorAll('.team-btn').forEach(btn => btn.classList.remove('active-team'));
-            document.getElementById('btn-' + team).classList.add('active-team');
-            document.getElementById('manual-scan').style.display = 'block';
-            document.getElementById('hud-title').innerText = "Team " + team.toUpperCase() + " gewählt";
-        }
-
-        var myLocationMarker;
-        function startGPS() {
-            const statusDiv = document.getElementById('status');
-            const team = localStorage.getItem('team');
-            if ("geolocation" in navigator) {
-                statusDiv.innerText = "GPS wird gesucht...";
-                navigator.geolocation.watchPosition((position) => {
-                    statusDiv.innerText = "📍 GPS aktiv!";
-                    if (myLocationMarker) map.removeLayer(myLocationMarker);
-                    myLocationMarker = L.circleMarker([position.coords.latitude, position.coords.longitude], { radius: 8, fillColor: "#00ccff", color: "#ffffff", weight: 3, fillOpacity: 1 }).addTo(map);
-                    
-                    fetch('/api/location', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: playerId, name: playerId, team: team, lat: position.coords.latitude, lng: position.coords.longitude }) }).catch(e => e);
-                }, (e) => { statusDiv.innerText = "❌ Fehler: Bitte GPS im Browser erlauben!"; }, { enableHighAccuracy: true });
-            }
-        }
-
-        function submitManualCode() {
-            const inputField = document.getElementById('manual-code-input');
-            let rawCode = inputField.value.trim().toUpperCase(); 
-            if (!rawCode) { alert("Bitte gib einen Code ein!"); return; }
-            window.location.href = "/scan.html?code=" + encodeURIComponent(rawCode);
-        }
-    </script>
+    <script src="player.js"></script>
 </body>
 </html>

@@ -82,7 +82,6 @@ window.toggleGameFreeze = function() {
     saveZones();
 }
 
-// DOCK MINIMIEREN
 function toggleDock() {
     const dock = document.getElementById('controls');
     if(dock) dock.classList.toggle('minimized');
@@ -132,13 +131,10 @@ function updateStatistics() {
 }
 
 // ==========================================
-// 👁️ LEGENDE & SICHTBARKEIT (GEFIXT)
+// 👁️ LEGENDE & SICHTBARKEIT 
 // ==========================================
-
 function applyZoneStyle(layer) {
     let props = layer.feature.properties;
-    
-    // Prüft, ob der Haken bei "Zonen anzeigen" drin ist
     let isVisible = document.getElementById('check-zones') ? document.getElementById('check-zones').checked : true;
     
     if (!isVisible) {
@@ -160,7 +156,7 @@ function toggleFeatures(type, isVisible) {
     drawnItems.eachLayer(function(layer) {
         if (layer.feature && layer.feature.properties && layer.feature.properties.type === type) {
             if (type === 'zone') {
-                applyZoneStyle(layer); // Nutzt jetzt die smarte Funktion!
+                applyZoneStyle(layer); 
                 if (layer._path) layer._path.style.pointerEvents = isVisible ? 'auto' : 'none';
             } 
             else if (type === 'transit-line') {
@@ -175,7 +171,6 @@ function toggleFeatures(type, isVisible) {
     });
 }
 
-// Diese Funktion zwingt die Karte, nach jedem Auto-Update die Haken zu kontrollieren
 function applyAllLegendFilters() {
     let showZones = document.getElementById('check-zones') ? document.getElementById('check-zones').checked : true;
     let showLines = document.getElementById('check-lines') ? document.getElementById('check-lines').checked : true;
@@ -186,7 +181,6 @@ function applyAllLegendFilters() {
     toggleFeatures('nfc-tag', showTags);
 }
 
-
 // ==========================================
 // 🛠 POPUP GENERATOREN
 // ==========================================
@@ -196,10 +190,19 @@ function generateZonePopupContent(props) {
     let lockState = props.locked ? "<span style='color:#ff4444;'>Gesperrt</span>" : "<span style='color:#33ff33;'>Aktiv</span>";
     let btnText = props.locked ? "🔓 Zone entsperren" : "🔒 Zone sperren";
     
+    // 🛒 Check ob eine Falle oder ein Buff auf der Zone liegt
+    let itemStatus = "<span style='color:#888;'>Keine</span>";
+    if (props.trap) {
+        itemStatus = `<span style='color:#ff8800; font-weight:bold;'>🪤 Falle (Team ${props.trap.toUpperCase()})</span>`;
+    } else if (props.buff) {
+        itemStatus = `<span style='color:#00ffcc; font-weight:bold;'>⚡ Buff (Team ${props.buff.toUpperCase()})</span>`;
+    }
+    
     return `<b>Zone</b><br>
             Code: <span style="font-family:monospace; color:#00ffcc;">${zCode}</span><br>
             Level: <b style="color:yellow;">${lvl}</b><br>
             Status: <b>${lockState}</b><br>
+            Shop-Item: ${itemStatus}<br>
             <hr style="border-color:#555; margin:8px 0;">
             <button onclick="toggleZoneLock('${zCode}')" style="background:#444; color:white; border:1px solid #666; padding:6px; font-size:12px; cursor:pointer; border-radius:4px; width:100%; font-weight:bold;">${btnText}</button>`;
 }
@@ -210,7 +213,11 @@ window.toggleZoneLock = function(code) {
             let props = layer.feature.properties;
             props.locked = !props.locked;
             applyZoneStyle(layer);
-            layer.setPopupContent(generateZonePopupContent(props));
+            
+            // Falls das Popup gerade offen ist, müssen wir es aktualisieren
+            if (layer.getPopup()) {
+                layer.setPopupContent(generateZonePopupContent(props));
+            }
             saveZones();
         }
     });
@@ -248,11 +255,11 @@ window.updateTagVisibility = function(tagId, isVisible) {
     });
 };
 
-
 // ==========================================
-// 🎨 EDITIER LOGIK
+// 🎨 EDITIER LOGIK (VERBESSERT: Kein Popup bei Linksklick)
 // ==========================================
 function makeEditable(layer) {
+    // LINKSKLICK = Nur umfärben (KEIN Popup)
     layer.on('click', function(e) {
         L.DomEvent.stopPropagation(e); 
         
@@ -271,8 +278,8 @@ function makeEditable(layer) {
         layer.feature.properties.level = newLevel;
         
         applyZoneStyle(layer); 
-        layer.setPopupContent(generateZonePopupContent(layer.feature.properties));
         
+        // Optisches Feedback beim Klicken (kurzes Aufblinken)
         layer.setStyle({fillOpacity: 0.9});
         setTimeout(() => applyZoneStyle(layer), 200);
         
@@ -280,9 +287,17 @@ function makeEditable(layer) {
         updateStatistics();
     });
 
+    // RECHTSKLICK = Popup öffnen
     layer.on('contextmenu', function(e) {
         L.DomEvent.stopPropagation(e);
-        layer.openPopup(e.latlng); 
+        // Wir "binden" das Popup nur für den Bruchteil einer Sekunde und öffnen es direkt
+        layer.bindPopup(generateZonePopupContent(layer.feature.properties)).openPopup(e.latlng);
+    });
+
+    // WICHTIG: Sobald das Popup wieder geschlossen wird, entfernen wir die Bindung. 
+    // Dadurch wird verhindert, dass spätere Linksklicks das Popup versehentlich wieder auslösen!
+    layer.on('popupclose', function() {
+        layer.unbindPopup();
     });
 }
 
@@ -310,7 +325,7 @@ map.on(L.Draw.Event.CREATED, function (event) {
         feature.properties.locked = false; 
         
         applyZoneStyle(layer);
-        layer.bindPopup(generateZonePopupContent(feature.properties));
+        // HIER WURDE BIND POPUP ENTFERNT
         makeEditable(layer);
         drawnItems.addLayer(layer);
 
@@ -344,21 +359,35 @@ map.on(L.Draw.Event.CREATED, function (event) {
     }
     updateStatistics(); 
     saveZones();
-    applyAllLegendFilters(); // Sorgt dafür, dass neu gezeichnete Dinge direkt unsichtbar sind, falls der Haken fehlt
+    applyAllLegendFilters(); 
 });
 
 map.on(L.Draw.Event.EDITED, saveZones);
 map.on(L.Draw.Event.DELETED, function (e) { saveZones(); updateStatistics(); });
 
+// ==========================================
+// 🛑 ZUSTAND FÜR DEN ZEICHEN-MODUS
+// ==========================================
+let isEditingMap = false;
+let isPopupOpen = false;
+
+map.on('draw:editstart', () => isEditingMap = true);
+map.on('draw:editstop', () => isEditingMap = false);
+map.on('draw:drawstart', () => isEditingMap = true);
+map.on('draw:drawstop', () => isEditingMap = false);
+map.on('draw:deletestart', () => isEditingMap = true);
+map.on('draw:deletestop', () => isEditingMap = false);
+
+map.on('popupopen', () => isPopupOpen = true);
+map.on('popupclose', () => isPopupOpen = false);
 
 // ==========================================
-// 🔄 AUTOMATISCHE AKTUALISIERUNG (15 SEK)
+// 🔄 AUTOMATISCHE AKTUALISIERUNG (10 SEK)
 // ==========================================
 function loadZonesFromServer() {
-    if (map._popup) return;
+    if (isEditingMap || isPopupOpen) return;
 
     fetch('/api/zones?t=' + new Date().getTime()).then(res => res.json()).then(data => {
-        
         if (data.gameSettings) {
             let radarToggle = document.getElementById('global-radar-toggle');
             if (radarToggle) radarToggle.checked = data.gameSettings.showPlayers === true;
@@ -366,9 +395,19 @@ function loadZonesFromServer() {
             let freezeToggle = document.getElementById('global-freeze-toggle');
             if (freezeToggle) freezeToggle.checked = data.gameSettings.gamePaused === true;
 
+            let shopToggle = document.getElementById('global-shop-toggle');
+            if (shopToggle && data.gameSettings.shopEnabled !== undefined) {
+                shopToggle.checked = data.gameSettings.shopEnabled;
+            }
+
             let cooldownInput = document.getElementById('cooldown-input');
             if (cooldownInput && document.activeElement !== cooldownInput) {
                 cooldownInput.value = data.gameSettings.playerCooldown || 0;
+            }
+
+            let payoutInput = document.getElementById('payout-interval-input');
+            if (payoutInput && data.gameSettings.payoutInterval !== undefined && document.activeElement !== payoutInput) {
+                payoutInput.value = data.gameSettings.payoutInterval;
             }
 
             gameEndTime = data.gameSettings.endTime || null;
@@ -376,8 +415,8 @@ function loadZonesFromServer() {
         }
         
         drawnItems.clearLayers();
-        
         let needsSave = false;
+        
         if (data.features && data.features.length > 0) {
             L.geoJSON(data, {
                 pointToLayer: function (feature, latlng) {
@@ -390,7 +429,7 @@ function loadZonesFromServer() {
                 onEachFeature: function (feature, layer) {
                     if (feature.properties.type === "zone") {
                         if (!feature.properties.code || !feature.properties.code.includes('#')) { feature.properties.code = generateSpecialCode(); needsSave = true; }
-                        layer.bindPopup(generateZonePopupContent(feature.properties));
+                        // HIER WURDE BIND POPUP ENTFERNT
                         applyZoneStyle(layer); 
                         makeEditable(layer);
                     } else if (feature.properties.type === "nfc-tag") {
@@ -400,14 +439,14 @@ function loadZonesFromServer() {
                 }
             });
             updateStatistics();
-            applyAllLegendFilters(); // 🛠 GEFIXT: Erzwingt die Checkboxen nach dem Auto-Update!
+            applyAllLegendFilters(); 
             
             if (needsSave) setTimeout(saveZones, 1000);
         }
     }).catch(err => console.log("Live-Update fehlgeschlagen:", err));
 }
 
-setInterval(loadZonesFromServer, 15000);
+setInterval(loadZonesFromServer, 10000); 
 loadZonesFromServer();
 
 // ==========================================
@@ -437,16 +476,74 @@ function saveZones() {
     
     let toggleRadar = document.getElementById('global-radar-toggle');
     let toggleFreeze = document.getElementById('global-freeze-toggle');
+    let toggleShop = document.getElementById('global-shop-toggle');
     let cooldownVal = document.getElementById('cooldown-input'); 
+    let payoutVal = document.getElementById('payout-interval-input');
     
     geoJsonData.gameSettings = {
         showPlayers: toggleRadar ? toggleRadar.checked : false,
         gamePaused: toggleFreeze ? toggleFreeze.checked : false,
+        shopEnabled: toggleShop ? toggleShop.checked : true,
         endTime: gameEndTime,
         announcement: gameAnnouncement,
-        playerCooldown: cooldownVal ? parseInt(cooldownVal.value) : 0 
+        playerCooldown: cooldownVal ? parseInt(cooldownVal.value) : 0,
+        payoutInterval: payoutVal ? parseInt(payoutVal.value) : 45 
     };
     
     fetch('/api/zones', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geoJsonData) })
     .then(res => res.json()).then(data => console.log("Auto-Save erfolgreich!")).catch(err => err);
 }
+
+// ==========================================
+// 💸 WIRTSCHAFT MANUELL VERWALTEN & ANZEIGEN
+// ==========================================
+function updateAdminCoins() {
+    fetch('/api/coins?t=' + new Date().getTime())
+        .then(res => res.json())
+        .then(coins => {
+            if(document.getElementById('admin-coins-rot')) document.getElementById('admin-coins-rot').innerText = coins.rot || 0;
+            if(document.getElementById('admin-coins-blau')) document.getElementById('admin-coins-blau').innerText = coins.blau || 0;
+            if(document.getElementById('admin-coins-gruen')) document.getElementById('admin-coins-gruen').innerText = coins.gruen || 0;
+            if(document.getElementById('admin-coins-gelb')) document.getElementById('admin-coins-gelb').innerText = coins.gelb || 0;
+        })
+        .catch(err => console.log("Fehler beim Laden der Coins:", err));
+}
+
+setInterval(updateAdminCoins, 5000);
+updateAdminCoins(); 
+
+window.manageCoins = function(action) {
+    let teamSelect = document.getElementById('bank-team-select');
+    let amountInput = document.getElementById('bank-amount');
+    
+    let team = teamSelect ? teamSelect.value : null;
+    let amount = amountInput ? amountInput.value : 0;
+
+    if (action === 'reset_all') {
+        if (!confirm("⚠️ ACHTUNG: Möchtest du wirklich die Kassen ALLER Teams auf 0 Coins zurücksetzen?")) return;
+    }
+
+    fetch('/api/coins/manage', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ team: team, amount: amount, action: action }) 
+    })
+    .then(async res => {
+        const contentType = res.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+            return res.json();
+        } else {
+            const text = await res.text();
+            throw new Error("Server hat nicht richtig geantwortet. Hast du den Server im Terminal neu gestartet?");
+        }
+    })
+    .then(data => {
+        if(data.success) {
+            updateAdminCoins(); 
+            alert(`✅ ${data.message}`);
+        } else {
+            alert("❌ Fehler: " + data.error);
+        }
+    })
+    .catch(err => alert("⚠️ " + err.message));
+};
