@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard - Live Controller</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="main-container">
+        
+        <div id="map">
+            <div id="legend">
+                <div class="legend-title" onclick="toggleSection('content-zones', this)">▼ Ebenen ein/ausblenden</div>
+                <div id="content-zones" class="legend-section">
+                    <label class="toggle-label"><input type="checkbox" id="check-zones" checked onchange="toggleFeatures('zone', this.checked)"> 🟩 Zonen anzeigen</label>
+                    <label class="toggle-label"><input type="checkbox" id="check-lines" checked onchange="toggleFeatures('transit-line', this.checked)"> 🚉 Linien anzeigen</label>
+                    <label class="toggle-label"><input type="checkbox" id="check-tags" checked onchange="toggleFeatures('nfc-tag', this.checked)"> 🟠 NFC-Punkte anzeigen</label>
+                </div>
+
+                <div class="legend-title" onclick="toggleSection('content-players', this)" style="margin-bottom: 5px;">▼ Live Spieler</div>
+                <div id="content-players" class="legend-section" style="margin-bottom: 0;">
+                    <div id="player-list" style="font-size: 13px; color: #aaa;">Warte auf GPS-Daten...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="sidebar-right">
+            <h3>Live Statistiken</h3>
+            <p style="color: #aaa; font-size: 14px; margin-bottom: 20px;">Anzahl der besetzten Zonen</p>
+            
+            <div class="stat-box rot"><span>Team Rot</span> <span class="stat-number" id="stat-rot">0</span></div>
+            <div class="stat-box blau"><span>Team Blau</span> <span class="stat-number" id="stat-blau">0</span></div>
+            <div class="stat-box gruen"><span>Team Grün</span> <span class="stat-number" id="stat-gruen">0</span></div>
+            <div class="stat-box gelb"><span>Team Gelb</span> <span class="stat-number" id="stat-gelb">0</span></div>
+            
+            <p style="color: #888; font-size: 12px; margin-top: 10px;"><b>Linksklick:</b> Umfärben. <b>Rechtsklick:</b> Zone sperren.</p>
+
+            <hr style="border-color: #333; margin: 30px 0;">
+            <h3>🎙 Game Master Tools</h3>
+            
+            <label style="font-size: 13px; color: #ccc;">Timer setzen (Minuten):</label>
+            <div style="display:flex; gap:5px; margin-bottom: 15px; margin-top: 5px;">
+                <input type="number" id="timer-input" style="width: 60px; background:#333; color:white; border:1px solid #555; padding:5px; border-radius:3px;" value="45">
+                <button onclick="startTimer()" style="padding: 5px 10px; font-size:13px;">Start</button>
+                <button onclick="stopTimer()" style="padding: 5px 10px; font-size:13px; background:#ca2727; color:white;">Stop</button>
+            </div>
+
+            <label style="font-size: 13px; color: #ccc;">Rundfunk (An alle):</label>
+            <div style="display:flex; gap:5px; margin-bottom: 15px; margin-top: 5px;">
+                <input type="text" id="announcement-input" style="flex:1; background:#333; color:white; border:1px solid #555; padding:5px; border-radius:3px;" placeholder="Letzte 10 Minuten!">
+                <button onclick="sendAnnouncement()" style="padding: 5px 10px; font-size:13px;">Senden</button>
+            </div>
+
+            <hr style="border-color: #333; margin: 30px 0;">
+            <h3>⚙️ Admin Kontrolle</h3>
+            <p style="color: #888; font-size: 12px;">Steuere hier, was die Spieler auf ihren Handys sehen dürfen.</p>
+            <label class="toggle-label" style="color: white; font-size: 15px;">
+                <input type="checkbox" id="global-radar-toggle" onchange="saveZones()"> 📡 Live-Standorte (Radar)
+            </label>
+            
+            <label class="toggle-label" style="color: #ff4444; font-size: 15px; margin-top: 15px; font-weight: bold;">
+                <input type="checkbox" id="global-freeze-toggle" onchange="toggleGameFreeze()"> 🛑 Spiel pausieren (NFCs aus)
+            </label>
+            <label style="font-size: 13px; color: #ccc;">Spieler Cooldown (Minuten):</label>
+            <div style="display:flex; gap:5px; margin-bottom: 15px; margin-top: 5px;">
+                <input type="number" id="cooldown-input" style="width: 60px; background:#333; color:white; border:1px solid #555; padding:5px; border-radius:3px;" value="0" onchange="saveZones()">
+                <span style="font-size: 12px; color: #888; align-self: center;">(0 = Deaktiviert)</span>
+            </div>
+        </div>
+    </div>
+
+<div id="controls" class="modern-dock">
+        
+        <button id="dock-toggle-btn" onclick="toggleDock()" title="Menü minimieren/ausklappen">⚙️</button>
+
+        <div id="dock-content">
+            <div class="control-group">
+                <span class="group-label">Zone</span>
+                <select id="zoneColor">
+                    <option value="#808080">⚪️ Grau (Neutral)</option>
+                    <option value="#ff3333">🔴 Team Rot</option>
+                    <option value="#3366ff">🔵 Team Blau</option>
+                    <option value="#33ff33">🟢 Team Grün</option>
+                    <option value="#ffcc00">🟡 Team Gelb</option>
+                </select>
+                <select id="zoneLevel">
+                    <option value="1">⭐ Level 1</option>
+                    <option value="2">⭐⭐ Level 2</option>
+                    <option value="3">⭐⭐⭐ Level 3</option>
+                </select>
+            </div>
+
+            <div class="control-divider"></div>
+
+            <div class="control-group">
+                <span class="group-label">🚉</span>
+                <select id="lineType">
+                    <option value="#0066ff">U-Bahn (Blau)</option>
+                    <option value="#00cc00">Tram (Grün)</option>
+                </select>
+            </div>
+
+            <div class="control-divider"></div>
+
+            <div class="control-group">
+                <button onclick="window.location.href='/chat.html'" class="btn-chat">Chat-Zentrale</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

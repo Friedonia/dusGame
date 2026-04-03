@@ -1,0 +1,200 @@
+body { margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #1e1e1e; color: white;}
+
+/* LAYOUT: Vollbild Split Screen */
+#main-container { display: flex; height: 100vh; width: 100vw; } /* Zieht die Karte über den ganzen Bildschirm */
+#map { flex: 3; position: relative; } 
+#sidebar-right { flex: 1; background-color: #151515; border-left: 2px solid #333; padding: 20px; box-sizing: border-box; overflow-y: auto;}
+
+/* Allgemeine Buttons (für Sidebar-Elemente) */
+button { padding: 10px 20px; font-size: 14px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+
+/* 🛠 DAS MODERNE FLOATING DOCK */
+#controls {
+    position: fixed;
+    bottom: 25px; /* Schwebt 25px über dem unteren Rand */
+    left: 37.5%; /* Exakt zentriert über der Karte (da die Karte 75% des Bildschirms ausmacht) */
+    transform: translateX(-50%);
+    background: rgba(30, 30, 30, 0.7); /* Leicht transparent */
+    backdrop-filter: blur(15px); /* Eleganter Milchglas-Effekt */
+    -webkit-backdrop-filter: blur(15px); /* Für Safari */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50px; /* Runde Pillen-Form */
+    padding: 10px 25px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    z-index: 2000; /* Legt sich über alles andere */
+}
+
+/* Gruppierung innerhalb des Docks */
+.control-group { display: flex; align-items: center; gap: 10px; }
+.group-label { font-size: 11px; color: #aaa; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
+.control-divider { width: 1px; height: 30px; background: rgba(255,255,255,0.2); }
+
+/* 🛠 DAS MODERNE FLOATING DOCK (Mit Minimieren-Animation) */
+#controls {
+    position: fixed;
+    bottom: 25px;
+    left: 37.5%; /* Standard: Zentriert über der Map */
+    transform: translateX(-50%);
+    background: rgba(30, 30, 30, 0.7);
+    backdrop-filter: blur(15px);
+    -webkit-backdrop-filter: blur(15px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50px;
+    padding: 8px 25px 8px 8px; /* Links weniger Padding für den Button */
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    z-index: 2000;
+    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    overflow: hidden;
+    height: 55px; /* Feste Höhe für saubere Übergänge */
+    box-sizing: border-box;
+}
+
+/* Der minimierte Zustand (Kreis unten links) */
+#controls.minimized {
+    left: 25px;
+    transform: translateX(0);
+    width: 55px;
+    padding: 0;
+    border-radius: 50%;
+    justify-content: center;
+}
+
+/* Versteckt den Inhalt, wenn minimiert */
+#dock-content {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    transition: opacity 0.2s ease-out, transform 0.3s ease;
+    opacity: 1;
+    transform: translateX(0);
+    white-space: nowrap;
+}
+
+#controls.minimized #dock-content {
+    opacity: 0;
+    transform: translateX(20px);
+    pointer-events: none; /* Klicks blockieren, wenn unsichtbar */
+    position: absolute; /* Verhindert, dass es den runden Button verzieht */
+}
+
+/* Der neue Toggle-Button (Zahnrad) */
+#dock-toggle-btn {
+    background: transparent;
+    color: white;
+    font-size: 20px;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.4s ease, background 0.2s;
+    flex-shrink: 0;
+}
+
+#dock-toggle-btn:hover {
+    background: rgba(255,255,255,0.1);
+}
+
+/* Dreht das Zahnrad beim Einklappen */
+#controls.minimized #dock-toggle-btn {
+    transform: rotate(180deg);
+    width: 55px; /* Füllt im minimierten Zustand den ganzen Kreis aus */
+    height: 55px;
+}
+
+/* ---- Gruppen & Divider ---- */
+.control-group { display: flex; align-items: center; gap: 10px; }
+.group-label { font-size: 11px; color: #aaa; text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
+.control-divider { width: 1px; height: 30px; background: rgba(255,255,255,0.2); }
+
+/* Moderne Dropdown-Menüs im Dock */
+#controls select {
+    appearance: none;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: white;
+    padding: 8px 35px 8px 15px;
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.2s ease;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 14px;
+}
+
+#controls select:hover { background-color: rgba(255, 255, 255, 0.15); border-color: #00ffcc; }
+#controls select:focus { border-color: #00ffcc; box-shadow: 0 0 10px rgba(0, 255, 204, 0.4); }
+#controls select option { background-color: #333; color: white; }
+
+/* Chat-Button im Dock */
+.btn-chat { background: linear-gradient(135deg, #00ffcc, #0099ff); color: black; border: none; padding: 8px 18px; border-radius: 20px; font-weight: bold; font-size: 14px; cursor: pointer; transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.btn-chat:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0, 255, 204, 0.5); }
+
+/* Chat-Button im Dock mit coolem Farbverlauf */
+.btn-chat {
+    background: linear-gradient(135deg, #00ffcc, #0099ff);
+    color: black;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-chat:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 255, 204, 0.5);
+}
+
+/* Legende (unten rechts auf der Karte) */
+#legend { position: absolute; bottom: 30px; right: 30px; background: rgba(20, 20, 20, 0.85); padding: 15px; border-radius: 8px; z-index: 1000; border: 1px solid #444; backdrop-filter: blur(5px); min-width: 180px; }
+.legend-title { font-weight: bold; font-size: 16px; border-bottom: 1px solid #555; padding-bottom: 5px; margin-bottom: 10px; cursor: pointer; user-select: none; transition: color 0.2s;}
+.legend-title:hover { color: #00ffcc; }
+.legend-section { margin-bottom: 15px; }
+.legend-item { display: flex; align-items: center; margin-bottom: 8px; font-size: 14px;}
+.circle-box { width: 14px; height: 14px; margin-right: 10px; border-radius: 50%; border: 1px solid white;}
+.toggle-label { display: flex; align-items: center; cursor: pointer; font-size: 13px; color: #ccc; margin-bottom: 6px;}
+.toggle-label input { margin-right: 8px; cursor: pointer;}
+
+/* Karten-Filter */
+.leaflet-tile-pane { filter: sepia(90%) hue-rotate(195deg) saturate(350%) brightness(230%) contrast(100%); }
+.leaflet-control-zoom, .leaflet-draw-section { filter: invert(0.85) hue-rotate(180deg); box-shadow: 0 0 0px rgba(0,0,0,0.8); border-radius: 4px; }
+.leaflet-bar { border: none !important; }
+
+/* Statistik-Boxen (in der rechten Sidebar) */
+.stat-box { display: flex; justify-content: space-between; align-items: center; background: #222; padding: 15px; margin-bottom: 10px; border-radius: 8px; border-left: 5px solid gray;}
+.stat-box.rot { border-left-color: #ca2727; }
+.stat-box.blau { border-left-color: #3366ff; }
+.stat-box.gruen { border-left-color: #33ff33; }
+.stat-box.gelb { border-left-color: #f38c05; }
+.stat-number { font-size: 24px; font-weight: bold; }
+/* 🛠 DUNKLE POPUPS FÜR BESSERE LESBARKEIT */
+.leaflet-popup-content-wrapper, 
+.leaflet-popup-tip {
+    background-color: #2a2a2a !important; /* Dunkelgrauer Hintergrund */
+    color: #ffffff !important; /* Weiße Schrift */
+    box-shadow: 0 4px 15px rgba(0,0,0,0.8) !important;
+}
+
+/* Das kleine "X" zum Schließen anpassen */
+.leaflet-popup-close-button {
+    color: #aaaaaa !important;
+}
+.leaflet-popup-close-button:hover {
+    color: #ffffff !important;
+}

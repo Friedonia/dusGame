@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Chat-Zentrale</title>
+    <style>
+        body { font-family: sans-serif; background: #121212; color: white; display: flex; height: 100vh; margin: 0; }
+        #sidebar { width: 250px; background: #1e1e1e; border-right: 1px solid #333; padding: 20px; }
+        #chat-area { flex: 1; display: flex; flexDirection: column; padding: 20px; }
+        #messages { flex: 1; overflow-y: auto; background: #181818; padding: 15px; border-radius: 5px; margin-bottom: 10px; }
+        .msg { margin-bottom: 10px; padding: 8px; border-radius: 5px; background: #2c3e50; }
+        .admin-msg { background: #27ae60; text-align: right; }
+        input { padding: 15px; background: #333; color: white; border: none; border-radius: 5px; }
+        .team-btn { display: block; width: 100%; padding: 10px; margin-bottom: 5px; background: #444; color: white; border: none; cursor: pointer; }
+        .active-team { background: #00ffcc; color: black; }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <h3>Teams</h3>
+        <button class="team-btn active-team" onclick="selectTeam('rot')">Team Rot</button>
+        <button class="team-btn" onclick="selectTeam('blau')">Team Blau</button>
+        <button class="team-btn" onclick="selectTeam('gruen')">Team Grün</button>
+        <br>
+        <button onclick="window.location.href='/'" style="width:100%; padding:10px; background:#e74c3c; border:none; color:white;">Zurück zur Karte</button>
+    </div>
+    <div id="chat-area">
+        <h2 id="chat-title">Chat mit Team Rot</h2>
+        <div id="messages"></div>
+        <input type="text" id="chatInput" placeholder="Nachricht an Team senden... (Enter)" onkeypress="handleKey(event)">
+    </div>
+
+    <script>
+        let currentTeam = 'rot';
+
+        function selectTeam(team) {
+            currentTeam = team;
+            document.querySelectorAll('.team-btn').forEach(btn => btn.classList.remove('active-team'));
+            event.target.classList.add('active-team');
+            document.getElementById('chat-title').innerText = "Chat mit Team " + team;
+            loadMessages();
+        }
+
+        function handleKey(e) {
+            if(e.key === 'Enter') {
+                const text = e.target.value;
+                fetch('/api/messages', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ sender: 'Admin', team: currentTeam, text: text })
+                }).then(() => {
+                    e.target.value = '';
+                    loadMessages();
+                });
+            }
+        }
+
+        function loadMessages() {
+            fetch('/api/messages')
+                .then(res => res.json())
+                .then(allMsgs => {
+                    const msgDiv = document.getElementById('messages');
+                    msgDiv.innerHTML = '';
+                    allMsgs.filter(m => m.team === currentTeam).forEach(m => {
+                        const div = document.createElement('div');
+                        div.className = 'msg ' + (m.sender === 'Admin' ? 'admin-msg' : '');
+                        div.innerHTML = `<b>${m.sender}:</b> ${m.text}`;
+                        msgDiv.appendChild(div);
+                    });
+                    msgDiv.scrollTop = msgDiv.scrollHeight;
+                });
+        }
+
+        setInterval(loadMessages, 2000); // Alle 2 Sek. aktualisieren
+    </script>
+</body>
+</html>
