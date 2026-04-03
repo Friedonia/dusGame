@@ -9,7 +9,6 @@ const ZONES_FILE = path.join(__dirname, 'zones.json');
 
 app.use(cors());
 app.use(express.json());
-// Stellt die Admin-Website aus dem "public" Ordner bereit
 app.use(express.static('public')); 
 
 // API: Alle Zonen abrufen (Das wird deine App später nutzen!)
