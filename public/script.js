@@ -182,7 +182,7 @@ function applyAllLegendFilters() {
 }
 
 // ==========================================
-// 🛠 POPUP GENERATOREN
+// 🛠 POPUP GENERATOREN & ITEM LÖSCHEN
 // ==========================================
 function generateZonePopupContent(props) {
     let lvl = props.level || 1;
@@ -190,11 +190,14 @@ function generateZonePopupContent(props) {
     let lockState = props.locked ? "<span style='color:#ff4444;'>Gesperrt</span>" : "<span style='color:#33ff33;'>Aktiv</span>";
     let btnText = props.locked ? "🔓 Zone entsperren" : "🔒 Zone sperren";
     
+    // 🛒 NEU: Roter Löschen-Button für Items
     let itemStatus = "<span style='color:#888;'>Keine</span>";
     if (props.trap) {
-        itemStatus = `<span style='color:#ff8800; font-weight:bold;'>🪤 Falle (Team ${props.trap.toUpperCase()})</span>`;
+        itemStatus = `<span style='color:#ff8800; font-weight:bold;'>🪤 Falle (Team ${props.trap.toUpperCase()})</span> 
+                      <button onclick="removeZoneItem('${zCode}')" style="background:#ff4444; color:white; border:none; border-radius:3px; cursor:pointer; padding:2px 6px; margin-left:5px; font-size:11px;">🗑️</button>`;
     } else if (props.buff) {
-        itemStatus = `<span style='color:#00ffcc; font-weight:bold;'>⚡ Buff (Team ${props.buff.toUpperCase()})</span>`;
+        itemStatus = `<span style='color:#00ffcc; font-weight:bold;'>⚡ Buff (Team ${props.buff.toUpperCase()})</span> 
+                      <button onclick="removeZoneItem('${zCode}')" style="background:#ff4444; color:white; border:none; border-radius:3px; cursor:pointer; padding:2px 6px; margin-left:5px; font-size:11px;">🗑️</button>`;
     }
     
     return `<b>Zone</b><br>
@@ -205,6 +208,42 @@ function generateZonePopupContent(props) {
             <hr style="border-color:#555; margin:8px 0;">
             <button onclick="toggleZoneLock('${zCode}')" style="background:#444; color:white; border:1px solid #666; padding:6px; font-size:12px; cursor:pointer; border-radius:4px; width:100%; font-weight:bold;">${btnText}</button>`;
 }
+
+// Funktion zum Löschen von Buffs/Fallen auf einer einzelnen Zone
+window.removeZoneItem = function(code) {
+    drawnItems.eachLayer(function(layer) {
+        if (layer.feature && layer.feature.properties && layer.feature.properties.code === code) {
+            delete layer.feature.properties.buff;
+            delete layer.feature.properties.trap;
+            saveZones(); // Speichert die Karte auf dem Server
+            if (layer.getPopup()) {
+                layer.setPopupContent(generateZonePopupContent(layer.feature.properties)); // Aktualisiert das Popup
+            }
+        }
+    });
+};
+
+// Funktion um ALLE Items auf der ganzen Karte zu löschen (z.B. für einen Button)
+window.resetAllItems = function() {
+    if(confirm("⚠️ Sollen ALLE Buffs und Fallen auf der gesamten Karte gelöscht werden?")) {
+        let changed = false;
+        drawnItems.eachLayer(function(layer) {
+            if (layer.feature && layer.feature.properties && layer.feature.properties.type === "zone") {
+                if (layer.feature.properties.buff || layer.feature.properties.trap) {
+                    delete layer.feature.properties.buff;
+                    delete layer.feature.properties.trap;
+                    changed = true;
+                }
+            }
+        });
+        if (changed) {
+            saveZones();
+            alert("✅ Alle Shop-Items (Buffs/Fallen) wurden von der Karte entfernt!");
+        } else {
+            alert("ℹ️ Es gab keine aktiven Buffs oder Fallen.");
+        }
+    }
+};
 
 window.toggleZoneLock = function(code) {
     drawnItems.eachLayer(function(layer) {
@@ -465,28 +504,47 @@ function updateLiveLocations() {
 setInterval(updateLiveLocations, 5000);
 
 // ==========================================
-// ⏳ LIVE SPIELER-COOLDOWNS IM ADMIN-PANEL
+// ⏳ LIVE SPIELER-COOLDOWNS IM ADMIN-PANEL (Mit Accordion-Menü)
 // ==========================================
+window.adminAccordionState = window.adminAccordionState || { rot: false, blau: false, gruen: false, gelb: false };
+
+window.toggleTeamAccordion = function(team) {
+    window.adminAccordionState[team] = !window.adminAccordionState[team];
+    let details = document.getElementById('cd-details-' + team);
+    let icon = document.getElementById('cd-icon-' + team);
+    if(details && icon) {
+        details.style.display = window.adminAccordionState[team] ? 'block' : 'none';
+        icon.innerText = window.adminAccordionState[team] ? '▼' : '▶';
+    }
+};
+
 function updateAdminCooldowns() {
     fetch('/api/admin/cooldown-states?t=' + new Date().getTime())
         .then(res => res.json())
         .then(data => {
             const container = document.getElementById('cooldown-live-view');
-            // Bricht ab, falls du das HTML-Element noch nicht in die admin.html eingefügt hast
             if (!container) return; 
 
-            container.innerHTML = ''; 
             const now = Date.now();
             const colors = { rot: '#ff3333', blau: '#3366ff', gruen: '#33ff33', gelb: '#ffcc00' };
 
+            let htmlStr = "";
             for (let team in data.states) {
-                // Liest die Zeit priorisiert direkt aus deinen Eingabefeldern im Admin-Panel ab
                 let cdInput = document.getElementById('cd-' + team);
                 let durationMins = cdInput ? parseInt(cdInput.value) : (data.durations[team] || 0);
                 let durationMs = durationMins * 60000;
                 
-                let teamHtml = `<div style="margin-bottom: 10px; padding: 5px; border-left: 4px solid ${colors[team] || '#aaa'};">
-                                  <strong>Team ${team.toUpperCase()}</strong> (${durationMins} Min)<br>`;
+                let isOpen = window.adminAccordionState[team];
+                let icon = isOpen ? '▼' : '▶';
+                let displayStyle = isOpen ? 'block' : 'none';
+
+                htmlStr += `
+                <div style="margin-bottom: 5px; border: 1px solid #444; border-radius: 4px; overflow: hidden;">
+                    <div onclick="toggleTeamAccordion('${team}')" style="background: #333; padding: 8px; cursor: pointer; display: flex; justify-content: space-between; border-left: 4px solid ${colors[team] || '#aaa'};">
+                        <strong style="color:white;">Team ${team.toUpperCase()}</strong>
+                        <span style="color:#aaa; font-size: 12px;">(${durationMins} Min) <span id="cd-icon-${team}">${icon}</span></span>
+                    </div>
+                    <div id="cd-details-${team}" style="display: ${displayStyle}; padding: 10px; background: #222;">`;
 
                 for (let playerNum in data.states[team]) {
                     let lastScan = data.states[team][playerNum].lastScan;
@@ -494,24 +552,28 @@ function updateAdminCooldowns() {
                     let statusText = "";
 
                     if (lastScan === 0 || diff <= 0 || durationMs === 0) {
-                        statusText = `<span style="color: #00ffcc;">Bereit</span>`;
+                        statusText = `<span style="color: #00ffcc; font-weight:bold;">Bereit</span>`;
                     } else {
                         let leftSecs = Math.ceil(diff / 1000);
                         let m = Math.floor(leftSecs / 60);
                         let s = leftSecs % 60;
-                        statusText = `<span style="color: #ff8800;">Blockiert (${m}:${s < 10 ? '0':''}${s})</span>`;
+                        statusText = `<span style="color: #ff8800; font-weight:bold;">⏳ ${m}:${s < 10 ? '0':''}${s}</span>`;
                     }
                     
-                    teamHtml += `<div style="font-size: 13px; margin-left: 10px;">Sp. ${playerNum}: ${statusText}</div>`;
+                    htmlStr += `<div style="display: flex; justify-content: space-between; margin-bottom: 4px; border-bottom: 1px solid #333; padding-bottom: 2px;">
+                                    <span style="color:#ddd;">Spieler ${playerNum}:</span> 
+                                    ${statusText}
+                                </div>`;
                 }
-                teamHtml += `</div>`;
-                container.innerHTML += teamHtml;
+                htmlStr += `</div></div>`;
             }
+            container.innerHTML = htmlStr;
         }).catch(err => console.log("Live-Cooldown Update Fehler (Admin-Panel):", err));
 }
 
-// Ruft die Cooldowns jede Sekunde ab
-setInterval(updateAdminCooldowns, 1000);
+if (!window.adminCooldownInterval) {
+    window.adminCooldownInterval = setInterval(updateAdminCooldowns, 1000);
+}
 
 
 // ==========================================
@@ -550,19 +612,25 @@ function saveZones() {
     .then(res => res.json()).then(data => console.log("Auto-Save erfolgreich!")).catch(err => err);
 }
 
-// 🔄 NEUE RESET-FUNKTION: Kommuniziert direkt mit der Server API
+// 🔄 SICHERER RESET-BEFEHL (Fängt Fehler ab!)
 window.resetAllCooldowns = function() {
     if(confirm("⚠️ Sollen die aktiven Cooldown-Sperren ALLER Spieler auf der Straße JETZT sofort beendet werden?")) {
         fetch('/api/reset-cooldowns', { method: 'POST' })
-            .then(res => res.json())
+            .then(async res => {
+                const contentType = res.headers.get("content-type");
+                if (contentType && contentType.includes("application/json")) {
+                    return res.json();
+                } else {
+                    throw new Error("Die Server-Route '/api/reset-cooldowns' existiert nicht oder ist fehlerhaft! Hast du die server.js aktualisiert?");
+                }
+            })
             .then(data => {
-                // Wir speichern die Reset-Zeit, damit die Handys das Signal beim nächsten Ping erkennen
-                window.globalCooldownResetTime = data.resetTime; 
+                window.globalCooldownResetTime = data.resetTime || Date.now(); 
                 saveZones(); 
                 alert("✅ Signal gesendet! Alle Scanner sind in wenigen Sekunden wieder bereit.");
-                updateAdminCooldowns(); // UI sofort aktualisieren
+                if(typeof updateAdminCooldowns === 'function') updateAdminCooldowns();
             })
-            .catch(err => alert("Fehler beim Reset: " + err));
+            .catch(err => alert("❌ Fehler beim Reset:\n" + err.message));
     }
 };
 

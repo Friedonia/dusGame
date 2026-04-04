@@ -1,5 +1,5 @@
 // ==========================================
-// 🛡️ ANTI-UNDEFINED SCHUTZ (Muss ganz oben stehen!)
+// 🛡️ ANTI-UNDEFINED SCHUTZ
 // ==========================================
 if (localStorage.getItem('team') === 'undefined' || localStorage.getItem('team') === 'null') {
     localStorage.removeItem('team');
@@ -29,14 +29,15 @@ if (urlPlayer && ['1', '2', '3'].includes(urlPlayer)) {
     localStorage.setItem('playerNum', '1');
 }
 
-const myTeam = localStorage.getItem('team');
-let myPlayerNum = localStorage.getItem('playerNum'); 
-const playerId = myTeam ? `${myTeam}_Player${myPlayerNum}` : 'Player_' + Math.floor(Math.random() * 1000);
+// WICHTIG: Teamname immer als Kleinbuchstaben erzwingen!
+const myTeam = String(localStorage.getItem('team') || 'rot').toLowerCase(); 
+let myPlayerNum = localStorage.getItem('playerNum') || '1'; 
+const playerId = `${myTeam}_Player${myPlayerNum}`;
 
 const teamColors = { 'rot': '#ff3333', 'blau': '#3366ff', 'gruen': '#33ff33', 'gelb': '#ffcc00' };
 const teamColorsRgb = { 'rot': '255, 51, 51', 'blau': '51, 102, 255', 'gruen': '51, 255, 51', 'gelb': '255, 204, 0' };
 
-if (myTeam) {
+if (localStorage.getItem('team')) {
     document.body.className = 'tint-' + myTeam;
     document.documentElement.style.setProperty('--team-color', teamColors[myTeam]);
     document.documentElement.style.setProperty('--team-color-rgb', teamColorsRgb[myTeam]);
@@ -56,34 +57,28 @@ window.setTeam = function(t) {
 };
 
 // ==========================================
-// 🚨 NEU: EIGENE COOLDOWN-BOX IM DASHBOARD
+// 🚨 EIGENE COOLDOWN-BOX IM DASHBOARD
 // ==========================================
 function setupDedicatedCooldownUI() {
     let controls = document.getElementById('player-controls');
     if(controls && !document.getElementById('dedicated-cooldown-display')) {
         let display = document.createElement('div');
         display.id = 'dedicated-cooldown-display';
-        // Fettes Design für das Dashboard
         display.style.cssText = "background: #222; border: 2px solid #444; border-radius: 8px; padding: 15px; margin-bottom: 15px; text-align: center; font-size: 16px; font-weight: bold; box-shadow: inset 0 0 10px rgba(0,0,0,0.5);";
         display.innerHTML = "Lade Cooldown-Daten...";
-        
-        // Fügt die Box ganz oben in die Kontrollen ein
         controls.insertBefore(display, controls.firstChild);
     }
 }
-if(myTeam) setupDedicatedCooldownUI();
+if(localStorage.getItem('team')) setupDedicatedCooldownUI();
 
 // ==========================================
-// 🛠 DEBUG / TROUBLESHOOTING UI (Spieler wechseln)
+// 🛠 DEBUG / TROUBLESHOOTING UI 
 // ==========================================
 function setupPlayerSwitcher() {
-    // 1. Zerstöre alle alten Menüs, falls noch Reste existieren
     document.querySelectorAll('#debug-player-switch').forEach(el => el.remove());
 
-    // 2. Baue das neue, saubere Menü auf
     const switcher = document.createElement('div');
     switcher.id = "debug-player-switch";
-    // Höher gesetzt (80px), um das Funkgerät nicht zu blockieren, und als kompakte Reihe (flex) formatiert
     switcher.style.cssText = "position: fixed; bottom: 80px; left: 20px; background: rgba(0, 0, 0, 0.8); color: white; padding: 10px; border-radius: 8px; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 8px;";
     
     switcher.innerHTML = `
@@ -94,7 +89,7 @@ function setupPlayerSwitcher() {
     `;
     document.body.appendChild(switcher);
 }
-if(myTeam) setupPlayerSwitcher(); 
+if(localStorage.getItem('team')) setupPlayerSwitcher(); 
 
 window.changePlayer = function(num) {
     myPlayerNum = num;
@@ -105,7 +100,6 @@ window.changePlayer = function(num) {
     window.history.pushState({}, '', newUrl);
     
     document.getElementById('hud-header').innerText = `🛡️ Team ${myTeam.toUpperCase()} | Spieler ${num}`;
-    // Baut das Menü neu (für die korrekte Button-Farbe)
     setupPlayerSwitcher(); 
 };
 
@@ -207,21 +201,21 @@ function updateMap() {
             document.getElementById('coin-display').style.display = 'block';
         }
 
-        // RESET-SIGNAL
+        // RESET-SIGNAL PRÜFEN (Abwärtskompatibel zu alten Keys)
         if (data.gameSettings && data.gameSettings.cooldownResetTime) {
-            let lastScan = localStorage.getItem('lastScanTime_' + myPlayerNum) || 0;
+            let lastScan = parseInt(localStorage.getItem(`lastScanTime_${myTeam}_${myPlayerNum}`) || localStorage.getItem(`lastScanTime_${myPlayerNum}`)) || 0;
             if (data.gameSettings.cooldownResetTime > lastScan) {
-                localStorage.setItem('lastScanTime_' + myPlayerNum, 0);
-                localStorage.setItem('cooldownModifier_' + myPlayerNum, 0);
+                localStorage.setItem(`lastScanTime_${myTeam}_${myPlayerNum}`, 0);
+                localStorage.setItem(`cooldownModifier_${myTeam}_${myPlayerNum}`, 0);
+                // Alte Keys sicherheitshalber auch nullen
+                localStorage.setItem(`lastScanTime_${myPlayerNum}`, 0);
+                localStorage.setItem(`cooldownModifier_${myPlayerNum}`, 0);
             }
         }
 
         // COOLDOWN ZEIT LADEN
         if (data.gameSettings && data.gameSettings.teamCooldowns) {
-            let safeTeamName = myTeam;
-            if (!safeTeamName || safeTeamName === 'undefined' || safeTeamName === 'null') safeTeamName = 'rot'; 
-            safeTeamName = safeTeamName.toLowerCase();
-            globalCooldownMins = parseInt(data.gameSettings.teamCooldowns[safeTeamName]) || 0;
+            globalCooldownMins = parseInt(data.gameSettings.teamCooldowns[myTeam]) || 0;
         } else {
             globalCooldownMins = 0;
         }
@@ -257,11 +251,17 @@ function updateMap() {
 }
 
 // ==========================================
-// ⏳ NEUER COOLDOWN CHECK (Steuert die neue Box)
+// ⏳ COOLDOWN CHECK (Steuert die neue Box)
 // ==========================================
+window.isCooldownActive = false;
+
 setInterval(() => {
-    let pNum = localStorage.getItem('playerNum') || '1'; 
-    let modifier = parseInt(localStorage.getItem('cooldownModifier_' + pNum)) || 0;
+    // WICHTIG: Nutzt jetzt die festen Variablen (myTeam, myPlayerNum),
+    // anstatt jede Sekunde den geteilten Tab-Speicher abzufragen!
+    let pNum = myPlayerNum; 
+    let tName = myTeam; 
+    
+    let modifier = parseInt(localStorage.getItem(`cooldownModifier_${tName}_${pNum}`) || localStorage.getItem(`cooldownModifier_${pNum}`)) || 0;
     
     let effectiveCooldownMins = (globalCooldownMins || 0) + modifier;
     if(effectiveCooldownMins < 0) effectiveCooldownMins = 0; 
@@ -271,29 +271,31 @@ setInterval(() => {
     let manualInput = document.getElementById('manual-code-input');
 
     if (effectiveCooldownMins > 0) {
-        let lastScanStr = localStorage.getItem('lastScanTime_' + pNum);
+        let lastScanStr = localStorage.getItem(`lastScanTime_${tName}_${pNum}`) || localStorage.getItem(`lastScanTime_${pNum}`);
         let lastScan = lastScanStr ? parseInt(lastScanStr) : 0;
         let now = Date.now();
         let diff = (effectiveCooldownMins * 60000) - (now - lastScan);
         
         if (diff > 0) {
+            window.isCooldownActive = true;
             let leftSecs = Math.ceil(diff / 1000);
             let m = Math.floor(leftSecs / 60);
             let s = leftSecs % 60;
             
-            // 🚫 BLOCKIERT STATUS in der dicken Box
             if(cdBox) {
                 cdBox.style.borderColor = "#ff4444";
                 cdBox.style.background = "rgba(255, 68, 68, 0.1)";
                 cdBox.style.color = "#ff4444";
-                cdBox.innerHTML = `⏳ SCANNER KÜHLT AB<br><span style="font-size:16px;">${m}:${s < 10 ? '0':''}${s}</span>`;
+                cdBox.innerHTML = `⏳ SCANNER KÜHLT AB<br><span style="font-size:32px;">${m}:${s < 10 ? '0':''}${s}</span>`;
             }
             if(submitBtn) { submitBtn.disabled = true; submitBtn.style.opacity = "0.3"; }
             if(manualInput) { manualInput.disabled = true; }
             
         } else {
-            // ✅ BEREIT STATUS (Nachdem er abgelaufen ist)
-            localStorage.setItem('cooldownModifier_' + pNum, 0);
+            window.isCooldownActive = false;
+            localStorage.setItem(`cooldownModifier_${tName}_${pNum}`, 0);
+            localStorage.setItem(`cooldownModifier_${pNum}`, 0); // Cleanup für alte Version
+            
             if(cdBox) {
                 cdBox.style.borderColor = "#00ffcc";
                 cdBox.style.background = "rgba(0, 255, 204, 0.1)";
@@ -304,7 +306,7 @@ setInterval(() => {
             if(manualInput) { manualInput.disabled = false; }
         }
     } else {
-        // ✅ KEIN COOLDOWN EINGESTELLT (0 Minuten)
+        window.isCooldownActive = false;
         if(cdBox) {
             cdBox.style.borderColor = "#444";
             cdBox.style.background = "#222";
@@ -315,7 +317,6 @@ setInterval(() => {
         if(manualInput) { manualInput.disabled = false; }
     }
 }, 1000);
-
 // ==========================================
 // 📍 LIVE SPIELER STANDORTE
 // ==========================================
@@ -335,7 +336,7 @@ setInterval(updateMap, 3000);
 updateMap();
 
 // ==========================================
-// 📍 GPS LOGIK (Stört den Cooldown jetzt nicht mehr!)
+// 📍 GPS LOGIK 
 // ==========================================
 var myLocationMarker;
 window.startGPS = function() {
@@ -344,7 +345,6 @@ window.startGPS = function() {
         if(statusDiv) statusDiv.innerText = "GPS wird gesucht...";
         navigator.geolocation.watchPosition((position) => {
             
-            // GPS kriegt jetzt exklusiv das Status-Feld!
             if(statusDiv) {
                 statusDiv.innerText = `📍 GPS aktiv!`;
                 statusDiv.style.color = "#00ccff";

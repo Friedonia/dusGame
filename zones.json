@@ -114,7 +114,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#3366ff",
+        "color": "#808080",
         "type": "zone",
         "code": "UE#0950#21",
         "level": 1
@@ -178,7 +178,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#3366ff",
+        "color": "#808080",
         "type": "zone",
         "code": "HU#0819#27",
         "level": 1
@@ -298,7 +298,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#3366ff",
+        "color": "#808080",
         "type": "zone",
         "code": "NR#8435#24",
         "level": 1
@@ -410,10 +410,10 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#3366ff",
+        "color": "#808080",
         "type": "zone",
         "code": "RU#3802#19",
-        "level": 2
+        "level": 1
       },
       "geometry": {
         "type": "Polygon",
@@ -462,7 +462,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#3366ff",
+        "color": "#808080",
         "type": "zone",
         "code": "HU#2763#27",
         "level": 1
@@ -510,7 +510,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#3366ff",
+        "color": "#808080",
         "type": "zone",
         "code": "TM#8862#37",
         "level": 1
@@ -739,7 +739,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#3366ff",
+        "color": "#808080",
         "type": "zone",
         "code": "RN#8040#16",
         "level": 1
@@ -795,7 +795,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#3366ff",
+        "color": "#808080",
         "type": "zone",
         "code": "RT#3124#15",
         "level": 1
@@ -855,10 +855,10 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#3366ff",
+        "color": "#808080",
         "type": "zone",
         "code": "HH#0623#17",
-        "level": 2
+        "level": 1
       },
       "geometry": {
         "type": "Polygon",
@@ -954,10 +954,11 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#808080",
+        "color": "#ff3333",
         "type": "zone",
         "code": "MR#3672#26",
-        "locked": false
+        "locked": false,
+        "level": 1
       },
       "geometry": {
         "type": "Polygon",
@@ -1002,7 +1003,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#ff3333",
+        "color": "#ffcc00",
         "type": "zone",
         "code": "NI#5614#22",
         "level": 1
@@ -1146,7 +1147,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#808080",
+        "color": "#ff3333",
         "type": "zone",
         "code": "EN#0072#14",
         "locked": false,
@@ -1243,7 +1244,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#ffcc00",
+        "color": "#808080",
         "type": "zone",
         "code": "RM#3929#31",
         "level": 1
@@ -1575,10 +1576,10 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#ff3333",
+        "color": "#ffcc00",
         "type": "zone",
         "code": "EM#3194#26",
-        "level": 3,
+        "level": 1,
         "locked": false
       },
       "geometry": {
@@ -1807,10 +1808,10 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#ff3333",
+        "color": "#808080",
         "type": "zone",
         "code": "TI#2377#26",
-        "level": 2
+        "level": 1
       },
       "geometry": {
         "type": "Polygon",
@@ -1883,11 +1884,10 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#ff3333",
+        "color": "#808080",
         "type": "zone",
         "code": "EI#8705#23",
-        "level": 1,
-        "buff": "rot"
+        "level": 1
       },
       "geometry": {
         "type": "Polygon",
