@@ -135,6 +135,73 @@ app.post('/api/zones', (req, res) => {
 
 
 // ==========================================
+// ⏳ NEU: COOLDOWN- & SPIELER-STATUS SYSTEM
+// ==========================================
+
+// Hier speichern wir die Scan-Zeiten (Timestamps) der Spieler auf dem Server
+let playerStates = {
+    rot:  { "1": { lastScan: 0 }, "2": { lastScan: 0 }, "3": { lastScan: 0 } },
+    blau: { "1": { lastScan: 0 }, "2": { lastScan: 0 }, "3": { lastScan: 0 } },
+    gruen:{ "1": { lastScan: 0 }, "2": { lastScan: 0 }, "3": { lastScan: 0 } },
+    gelb: { "1": { lastScan: 0 }, "2": { lastScan: 0 }, "3": { lastScan: 0 } }
+};
+
+// 1. Wenn ein Spieler scannt, ruft er das hier auf:
+app.post('/api/player-scan', (req, res) => {
+    const { team, player, timestamp } = req.body;
+    
+    if (playerStates[team] && playerStates[team][player]) {
+        playerStates[team][player].lastScan = timestamp;
+        console.log(`[SCAN] Team ${team} | Spieler ${player} hat gescannt.`);
+    }
+    res.json({ success: true });
+});
+
+app.get('/api/admin/cooldown-states', (req, res) => {
+    // Falls gameSettings mal nicht definiert sein sollte, haben wir hier einen Fallback:
+    let currentDurations = { rot: 5, blau: 5, gruen: 5, gelb: 5 };
+    try {
+        // Das greift auf deine global gespeicherten Server-Settings zu
+        if (typeof gameSettings !== 'undefined' && gameSettings.teamCooldowns) {
+            currentDurations = gameSettings.teamCooldowns;
+        }
+    } catch(e) {
+        console.log("Settings noch nicht geladen, verwende Standard.");
+    }
+    
+    res.json({ 
+        states: playerStates,
+        durations: currentDurations
+    });
+});
+// 3. Admin resettet die Cooldowns (Button: "Aktive Cooldowns sofort beenden")
+app.post('/api/reset-cooldowns', (req, res) => {
+    const { team } = req.body; // Optional: Wenn der Admin nur ein bestimmtes Team resetten will
+    const now = Date.now();
+    
+    // WICHTIG: Setzt das Signal für alle Handys (die player.js prüft diesen Wert!)
+    if (!gameSettings) gameSettings = {};
+    gameSettings.cooldownResetTime = now; 
+
+    if (team && playerStates[team]) {
+        // Nur ein Team resetten
+        playerStates[team]["1"].lastScan = 0;
+        playerStates[team]["2"].lastScan = 0;
+        playerStates[team]["3"].lastScan = 0;
+    } else {
+        // Alle Teams resetten
+        for (let t in playerStates) {
+            playerStates[t]["1"].lastScan = 0;
+            playerStates[t]["2"].lastScan = 0;
+            playerStates[t]["3"].lastScan = 0;
+        }
+    }
+    
+    console.log("[ADMIN] Cooldowns wurden resettet!");
+    res.json({ success: true, resetTime: now });
+});
+
+// ==========================================
 // 📍 SPIELER STANDORTE
 // ==========================================
 let playerLocations = {};

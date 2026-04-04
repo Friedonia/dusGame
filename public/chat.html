@@ -2,76 +2,313 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>Admin Chat-Zentrale</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Funkzentrale</title>
     <style>
-        body { font-family: sans-serif; background: #121212; color: white; display: flex; height: 100vh; margin: 0; }
-        #sidebar { width: 250px; background: #1e1e1e; border-right: 1px solid #333; padding: 20px; }
-        #chat-area { flex: 1; display: flex; flexDirection: column; padding: 20px; }
-        #messages { flex: 1; overflow-y: auto; background: #181818; padding: 15px; border-radius: 5px; margin-bottom: 10px; }
-        .msg { margin-bottom: 10px; padding: 8px; border-radius: 5px; background: #2c3e50; }
-        .admin-msg { background: #27ae60; text-align: right; }
-        input { padding: 15px; background: #333; color: white; border: none; border-radius: 5px; }
-        .team-btn { display: block; width: 100%; padding: 10px; margin-bottom: 5px; background: #444; color: white; border: none; cursor: pointer; }
-        .active-team { background: #00ffcc; color: black; }
+        :root {
+            --rot: #ff3333;
+            --blau: #3366ff;
+            --gruen: #33ff33;
+            --gelb: #ffcc00;
+            --bg-dark: #121212;
+            --bg-panel: #1e1e1e;
+        }
+
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: var(--bg-dark); 
+            color: white; 
+            display: flex; 
+            height: 100vh; 
+            margin: 0; 
+            overflow: hidden;
+        }
+
+        /* SIDEBAR DESIGN */
+        #sidebar { 
+            width: 260px; 
+            background: var(--bg-panel); 
+            border-right: 1px solid #333; 
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #sidebar-header {
+            padding: 20px;
+            background: #111;
+            border-bottom: 1px solid #333;
+            text-align: center;
+        }
+        
+        #sidebar-header h2 { margin: 0; font-size: 18px; color: #aaa; text-transform: uppercase; letter-spacing: 1px; }
+
+        .team-list { padding: 15px; flex: 1; }
+
+        .team-btn { 
+            display: block; 
+            width: 100%; 
+            padding: 15px; 
+            margin-bottom: 10px; 
+            background: #2a2a2a; 
+            color: #ccc; 
+            border: 1px solid #444; 
+            border-radius: 8px;
+            cursor: pointer; 
+            font-size: 16px;
+            font-weight: bold;
+            text-align: left;
+            transition: all 0.2s;
+        }
+
+        .team-btn:hover { background: #333; color: white; }
+
+        /* Aktive Status-Farben */
+        .active-rot { background: rgba(255, 51, 51, 0.15) !important; border-color: var(--rot) !important; color: var(--rot) !important; }
+        .active-blau { background: rgba(51, 102, 255, 0.15) !important; border-color: var(--blau) !important; color: var(--blau) !important; }
+        .active-gruen { background: rgba(51, 255, 51, 0.15) !important; border-color: var(--gruen) !important; color: var(--gruen) !important; }
+        .active-gelb { background: rgba(255, 204, 0, 0.15) !important; border-color: var(--gelb) !important; color: var(--gelb) !important; }
+
+        .back-btn {
+            margin: 15px;
+            padding: 15px;
+            background: #444;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+        .back-btn:hover { background: #ff4444; }
+
+        /* CHAT BEREICH */
+        #chat-area { 
+            flex: 1; 
+            display: flex; 
+            flex-direction: column; 
+            background: url('data:image/svg+xml;utf8,<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg"><circle cx="2" cy="2" r="1" fill="%23222"/></svg>'); /* Leichte Punkt-Textur */
+        }
+
+        #chat-header {
+            padding: 20px;
+            background: rgba(30, 30, 30, 0.95);
+            border-bottom: 1px solid #333;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+        #chat-header h2 { margin: 0; color: white; }
+
+        #messages { 
+            flex: 1; 
+            overflow-y: auto; 
+            padding: 20px; 
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        /* Scrollbar Styling */
+        #messages::-webkit-scrollbar { width: 8px; }
+        #messages::-webkit-scrollbar-track { background: #111; }
+        #messages::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+
+        /* Chat Bubbles */
+        .msg-container { display: flex; flex-direction: column; max-width: 70%; }
+        .msg-container.player { align-self: flex-start; }
+        .msg-container.admin { align-self: flex-end; }
+
+        .msg-sender { font-size: 11px; color: #888; margin-bottom: 4px; padding: 0 5px; }
+        .admin .msg-sender { text-align: right; color: #00ffcc; }
+
+        .msg-bubble { 
+            padding: 12px 18px; 
+            border-radius: 18px; 
+            font-size: 15px; 
+            line-height: 1.4;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        /* Farbige Bubbles für Spieler */
+        .player .msg-bubble { background: #2c2c2c; border-top-left-radius: 4px; }
+        .player-rot .msg-bubble { border-left: 4px solid var(--rot); }
+        .player-blau .msg-bubble { border-left: 4px solid var(--blau); }
+        .player-gruen .msg-bubble { border-left: 4px solid var(--gruen); }
+        .player-gelb .msg-bubble { border-left: 4px solid var(--gelb); }
+
+        /* Bubble für Admin */
+        .admin .msg-bubble { 
+            background: #005a4e; /* Dunkles Türkis */
+            color: #fff; 
+            border-top-right-radius: 4px; 
+            border-right: 4px solid #00ffcc;
+        }
+
+        /* INPUT BEREICH */
+        #input-area {
+            padding: 20px;
+            background: var(--bg-panel);
+            border-top: 1px solid #333;
+            display: flex;
+            gap: 10px;
+        }
+
+        #chatInput { 
+            flex: 1; 
+            padding: 15px; 
+            background: #111; 
+            color: white; 
+            border: 1px solid #444; 
+            border-radius: 8px; 
+            font-size: 16px;
+            outline: none;
+            transition: border 0.3s;
+        }
+        #chatInput:focus { border-color: #00ffcc; }
+
+        #sendBtn {
+            padding: 0 25px;
+            background: #00ffcc;
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        #sendBtn:active { transform: scale(0.95); }
+
     </style>
 </head>
 <body>
+
     <div id="sidebar">
-        <h3>Teams</h3>
-        <button class="team-btn active-team" onclick="selectTeam('rot')">Team Rot</button>
-        <button class="team-btn" onclick="selectTeam('blau')">Team Blau</button>
-        <button class="team-btn" onclick="selectTeam('gruen')">Team Grün</button>
-        <br>
-        <button onclick="window.location.href='/'" style="width:100%; padding:10px; background:#e74c3c; border:none; color:white;">Zurück zur Karte</button>
+        <div id="sidebar-header">
+            <h2>📡 Funkzentrale</h2>
+        </div>
+        <div class="team-list">
+            <button id="btn-rot" class="team-btn active-rot" onclick="selectTeam('rot')">🔴 Team Rot</button>
+            <button id="btn-blau" class="team-btn" onclick="selectTeam('blau')">🔵 Team Blau</button>
+            <button id="btn-gruen" class="team-btn" onclick="selectTeam('gruen')">🟢 Team Grün</button>
+            <button id="btn-gelb" class="team-btn" onclick="selectTeam('gelb')">🟡 Team Gelb</button>
+        </div>
+        <button class="back-btn" onclick="window.location.href='/index.html'">🗺️ Admin Karte</button>
     </div>
+
     <div id="chat-area">
-        <h2 id="chat-title">Chat mit Team Rot</h2>
-        <div id="messages"></div>
-        <input type="text" id="chatInput" placeholder="Nachricht an Team senden... (Enter)" onkeypress="handleKey(event)">
+        <div id="chat-header">
+            <h2 id="chat-title">🔴 Funkkanal: Team Rot</h2>
+        </div>
+        
+        <div id="messages">
+            </div>
+        
+        <div id="input-area">
+            <input type="text" id="chatInput" placeholder="Nachricht an Team Rot senden... (Enter)" onkeypress="handleKey(event)">
+            <button id="sendBtn" onclick="sendMessage()">Senden</button>
+        </div>
     </div>
 
     <script>
         let currentTeam = 'rot';
+        const teamNames = { 'rot': '🔴 Team Rot', 'blau': '🔵 Team Blau', 'gruen': '🟢 Team Grün', 'gelb': '🟡 Team Gelb' };
 
+        // 1. TEAM AUSWÄHLEN
         function selectTeam(team) {
             currentTeam = team;
-            document.querySelectorAll('.team-btn').forEach(btn => btn.classList.remove('active-team'));
-            event.target.classList.add('active-team');
-            document.getElementById('chat-title').innerText = "Chat mit Team " + team;
-            loadMessages();
+            
+            // Buttons zurücksetzen
+            document.querySelectorAll('.team-btn').forEach(btn => {
+                btn.className = 'team-btn'; // Alle Klassen entfernen außer Standard
+            });
+            
+            // Aktiven Button markieren
+            document.getElementById('btn-' + team).classList.add('active-' + team);
+            
+            // Header und Placeholder anpassen
+            document.getElementById('chat-title').innerHTML = `Funkkanal: ${teamNames[team]}`;
+            document.getElementById('chatInput').placeholder = `Nachricht an ${teamNames[team].substring(2)} senden... (Enter)`;
+            
+            // Fokus aufs Eingabefeld
+            document.getElementById('chatInput').focus();
+            
+            loadMessages(true); // True = zwingend ganz nach unten scrollen bei Kanalwechsel
         }
 
+        // 2. NACHRICHT SENDEN (Enter-Taste oder Button)
         function handleKey(e) {
-            if(e.key === 'Enter') {
-                const text = e.target.value;
-                fetch('/api/messages', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ sender: 'Admin', team: currentTeam, text: text })
-                }).then(() => {
-                    e.target.value = '';
-                    loadMessages();
-                });
-            }
+            if(e.key === 'Enter') sendMessage();
         }
 
-        function loadMessages() {
-            fetch('/api/messages')
+        function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const text = input.value.trim();
+            if (!text) return;
+
+            // WICHTIG: Angepasst an die player.js (sendet an /api/chat und nutzt "message" statt "text")
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ 
+                    sender: 'HQ (Admin)', 
+                    team: currentTeam, 
+                    message: text,
+                    type: 'admin' 
+                })
+            }).then(() => {
+                input.value = '';
+                loadMessages(true);
+            }).catch(err => console.error("Fehler beim Senden:", err));
+        }
+
+        // 3. NACHRICHTEN LADEN
+        let lastMessageCount = 0;
+
+        function loadMessages(forceScroll = false) {
+            // Timestamp verhindert Caching im Browser
+            fetch('/api/chat?t=' + new Date().getTime())
                 .then(res => res.json())
                 .then(allMsgs => {
                     const msgDiv = document.getElementById('messages');
-                    msgDiv.innerHTML = '';
-                    allMsgs.filter(m => m.team === currentTeam).forEach(m => {
-                        const div = document.createElement('div');
-                        div.className = 'msg ' + (m.sender === 'Admin' ? 'admin-msg' : '');
-                        div.innerHTML = `<b>${m.sender}:</b> ${m.text}`;
-                        msgDiv.appendChild(div);
+                    
+                    // Filtern: Nur Nachrichten des aktuellen Teams oder "An Alle"
+                    const teamMsgs = allMsgs.filter(m => m.team === currentTeam || m.team === 'all');
+                    
+                    // Verhindert Flackern: Nur neu zeichnen, wenn sich die Anzahl geändert hat oder wir das Team gewechselt haben
+                    if (!forceScroll && teamMsgs.length === lastMessageCount) return;
+                    lastMessageCount = teamMsgs.length;
+
+                    msgDiv.innerHTML = ''; // Leeren
+
+                    teamMsgs.forEach(m => {
+                        const isPlayer = m.type !== 'admin';
+                        // Berücksichtige den "message" (neu) und "text" (alt) Parameter zur Sicherheit
+                        const msgText = m.message || m.text || ''; 
+                        
+                        // Container aufbauen (Links = Spieler, Rechts = Admin)
+                        const wrapper = document.createElement('div');
+                        wrapper.className = `msg-container ${isPlayer ? 'player player-' + m.team : 'admin'}`;
+                        
+                        wrapper.innerHTML = `
+                            <div class="msg-sender">${m.sender}</div>
+                            <div class="msg-bubble">${msgText}</div>
+                        `;
+                        
+                        msgDiv.appendChild(wrapper);
                     });
-                    msgDiv.scrollTop = msgDiv.scrollHeight;
-                });
+
+                    // Nach unten scrollen, wenn neue Nachrichten da sind oder Kanal gewechselt wurde
+                    if (forceScroll || msgDiv.scrollTop + msgDiv.clientHeight >= msgDiv.scrollHeight - 100) {
+                        msgDiv.scrollTop = msgDiv.scrollHeight;
+                    }
+                }).catch(err => console.log("Warte auf Chat-Server..."));
         }
 
-        setInterval(loadMessages, 2000); // Alle 2 Sek. aktualisieren
+        // Alle 2 Sek. auf neue Nachrichten prüfen
+        setInterval(() => loadMessages(false), 2000); 
+        
+        // Initialer Ladevorgang
+        loadMessages(true);
     </script>
 </body>
 </html>

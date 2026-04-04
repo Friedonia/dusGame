@@ -1,48 +1,117 @@
 // ==========================================
-// 1. TEAM-ERKENNUNG & UI-AUFBAU
+// 🛡️ ANTI-UNDEFINED SCHUTZ (Muss ganz oben stehen!)
 // ==========================================
+if (localStorage.getItem('team') === 'undefined' || localStorage.getItem('team') === 'null') {
+    localStorage.removeItem('team');
+}
+if (localStorage.getItem('playerNum') === 'undefined' || localStorage.getItem('playerNum') === 'null') {
+    localStorage.setItem('playerNum', '1');
+}
 
-// Checkt, ob das Team im Link steht (z.B. ?team=rot)
+const urlParamsCheck = new URLSearchParams(window.location.search);
+if (urlParamsCheck.get('team') === 'undefined' || urlParamsCheck.get('team') === 'null') {
+    window.location.href = window.location.pathname; 
+}
+
+// ==========================================
+// 1. TEAM- & SPIELER-ERKENNUNG & UI-AUFBAU
+// ==========================================
 const urlParams = new URLSearchParams(window.location.search);
 let urlTeam = urlParams.get('team');
+let urlPlayer = urlParams.get('player');
+
 if (urlTeam && ['rot', 'blau', 'gruen', 'gelb'].includes(urlTeam)) {
     localStorage.setItem('team', urlTeam);
 }
+if (urlPlayer && ['1', '2', '3'].includes(urlPlayer)) {
+    localStorage.setItem('playerNum', urlPlayer);
+} else if (!localStorage.getItem('playerNum')) {
+    localStorage.setItem('playerNum', '1');
+}
 
 const myTeam = localStorage.getItem('team');
+let myPlayerNum = localStorage.getItem('playerNum'); 
+const playerId = myTeam ? `${myTeam}_Player${myPlayerNum}` : 'Player_' + Math.floor(Math.random() * 1000);
+
 const teamColors = { 'rot': '#ff3333', 'blau': '#3366ff', 'gruen': '#33ff33', 'gelb': '#ffcc00' };
 const teamColorsRgb = { 'rot': '255, 51, 51', 'blau': '51, 102, 255', 'gruen': '51, 255, 51', 'gelb': '255, 204, 0' };
 
 if (myTeam) {
-    // 🎨 Das magische Einfärben der gesamten Karte & des HUDs
     document.body.className = 'tint-' + myTeam;
     document.documentElement.style.setProperty('--team-color', teamColors[myTeam]);
     document.documentElement.style.setProperty('--team-color-rgb', teamColorsRgb[myTeam]);
-    document.getElementById('hud-header').innerText = "🛡️ Team " + myTeam.toUpperCase();
+    
+    document.getElementById('hud-header').innerText = `🛡️ Team ${myTeam.toUpperCase()} | Spieler ${myPlayerNum}`;
 
-    // Menüs ein/ausblenden
     document.getElementById('team-selector-container').style.display = 'none';
     document.getElementById('player-controls').style.display = 'block';
     document.getElementById('toggle-hud-btn').style.display = 'block';
     document.getElementById('chat-widget').style.display = 'flex';
 } else {
-    // Falls noch kein Team gewählt wurde, bleib im neutralen Modus
     document.getElementById('hud-header').innerText = "Wähle dein Team";
 }
 
-// Wird aufgerufen, wenn jemand auf einen der 4 Team-Buttons klickt
 window.setTeam = function(t) {
-    window.location.href = '?team=' + t; // Lädt die Seite sofort mit der Farbe neu!
+    window.location.href = '?team=' + t + '&player=1'; 
 };
 
-if (!localStorage.getItem('playerId')) {
-    localStorage.setItem('playerId', 'Player_' + Math.floor(Math.random() * 1000));
+// ==========================================
+// 🚨 NEU: EIGENE COOLDOWN-BOX IM DASHBOARD
+// ==========================================
+function setupDedicatedCooldownUI() {
+    let controls = document.getElementById('player-controls');
+    if(controls && !document.getElementById('dedicated-cooldown-display')) {
+        let display = document.createElement('div');
+        display.id = 'dedicated-cooldown-display';
+        // Fettes Design für das Dashboard
+        display.style.cssText = "background: #222; border: 2px solid #444; border-radius: 8px; padding: 15px; margin-bottom: 15px; text-align: center; font-size: 16px; font-weight: bold; box-shadow: inset 0 0 10px rgba(0,0,0,0.5);";
+        display.innerHTML = "Lade Cooldown-Daten...";
+        
+        // Fügt die Box ganz oben in die Kontrollen ein
+        controls.insertBefore(display, controls.firstChild);
+    }
 }
-const playerId = localStorage.getItem('playerId');
+if(myTeam) setupDedicatedCooldownUI();
 
-// --- HIER KOMMT DANN DEIN RESTLICHER PLAYER.JS CODE (Map, GPS, Cooldown etc.) ---
+// ==========================================
+// 🛠 DEBUG / TROUBLESHOOTING UI (Spieler wechseln)
+// ==========================================
+function setupPlayerSwitcher() {
+    // 1. Zerstöre alle alten Menüs, falls noch Reste existieren
+    document.querySelectorAll('#debug-player-switch').forEach(el => el.remove());
 
-// HUD & Chat Steuerung
+    // 2. Baue das neue, saubere Menü auf
+    const switcher = document.createElement('div');
+    switcher.id = "debug-player-switch";
+    // Höher gesetzt (80px), um das Funkgerät nicht zu blockieren, und als kompakte Reihe (flex) formatiert
+    switcher.style.cssText = "position: fixed; bottom: 80px; left: 20px; background: rgba(0, 0, 0, 0.8); color: white; padding: 10px; border-radius: 8px; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 8px;";
+    
+    switcher.innerHTML = `
+      <div style="font-size: 14px; font-weight: bold; color: #aaa;">🛠 Sp:</div>
+      <button onclick="changePlayer('1')" style="padding: 6px 12px; cursor: pointer; background: ${myPlayerNum === '1' ? 'var(--team-color)' : '#333'}; color: ${myPlayerNum === '1' ? '#000' : '#fff'}; border: none; border-radius: 4px; font-weight: bold;">P 1</button>
+      <button onclick="changePlayer('2')" style="padding: 6px 12px; cursor: pointer; background: ${myPlayerNum === '2' ? 'var(--team-color)' : '#333'}; color: ${myPlayerNum === '2' ? '#000' : '#fff'}; border: none; border-radius: 4px; font-weight: bold;">P 2</button>
+      <button onclick="changePlayer('3')" style="padding: 6px 12px; cursor: pointer; background: ${myPlayerNum === '3' ? 'var(--team-color)' : '#333'}; color: ${myPlayerNum === '3' ? '#000' : '#fff'}; border: none; border-radius: 4px; font-weight: bold;">P 3</button>
+    `;
+    document.body.appendChild(switcher);
+}
+if(myTeam) setupPlayerSwitcher(); 
+
+window.changePlayer = function(num) {
+    myPlayerNum = num;
+    localStorage.setItem('playerNum', num);
+    
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.set('player', num);
+    window.history.pushState({}, '', newUrl);
+    
+    document.getElementById('hud-header').innerText = `🛡️ Team ${myTeam.toUpperCase()} | Spieler ${num}`;
+    // Baut das Menü neu (für die korrekte Button-Farbe)
+    setupPlayerSwitcher(); 
+};
+
+// ==========================================
+// 2. HUD, CHAT & KARTE
+// ==========================================
 let hudCollapsed = false;
 window.toggleHud = function() {
     const content = document.getElementById('hud-content-wrapper');
@@ -84,7 +153,7 @@ window.sendChat = function() {
     fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sender: playerId, team: myTeam, message: msg, type: 'player' }) }).catch(err => err);
 }
 
-// Karte initialisieren
+// KARTE LADEN
 var map = L.map('map', { zoomControl: false }).setView([51.2277, 6.7735], 13.2);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
 
@@ -99,7 +168,6 @@ let globalCooldownMins = 0;
 function updateMap() {
     fetch('/api/zones').then(res => res.json()).then(data => {
         
-        // 🎙 RUNDFUNK & TIMER
         if (data.gameSettings && data.gameSettings.announcement) { 
             if (data.gameSettings.announcement.timestamp > lastAnnouncementTime) {
                 let timeDiff = Date.now() - data.gameSettings.announcement.timestamp;
@@ -133,14 +201,30 @@ function updateMap() {
             clearInterval(timerInterval);
         }
         
-        // 🛒 SHOP ANZEIGE TOGGLE
         if (data.gameSettings && data.gameSettings.shopEnabled === false) {
             document.getElementById('coin-display').style.display = 'none';
         } else {
             document.getElementById('coin-display').style.display = 'block';
         }
 
-        globalCooldownMins = data.gameSettings && data.gameSettings.playerCooldown ? parseInt(data.gameSettings.playerCooldown) : 0;
+        // RESET-SIGNAL
+        if (data.gameSettings && data.gameSettings.cooldownResetTime) {
+            let lastScan = localStorage.getItem('lastScanTime_' + myPlayerNum) || 0;
+            if (data.gameSettings.cooldownResetTime > lastScan) {
+                localStorage.setItem('lastScanTime_' + myPlayerNum, 0);
+                localStorage.setItem('cooldownModifier_' + myPlayerNum, 0);
+            }
+        }
+
+        // COOLDOWN ZEIT LADEN
+        if (data.gameSettings && data.gameSettings.teamCooldowns) {
+            let safeTeamName = myTeam;
+            if (!safeTeamName || safeTeamName === 'undefined' || safeTeamName === 'null') safeTeamName = 'rot'; 
+            safeTeamName = safeTeamName.toLowerCase();
+            globalCooldownMins = parseInt(data.gameSettings.teamCooldowns[safeTeamName]) || 0;
+        } else {
+            globalCooldownMins = 0;
+        }
 
         zoneLayer.clearLayers();
         L.geoJSON(data, {
@@ -169,44 +253,72 @@ function updateMap() {
 
         if (data.gameSettings && data.gameSettings.showPlayers === true) fetchPlayers();
         else playerLayer.clearLayers(); 
-    });
+    }).catch(err => console.error(err)); 
 }
 
-// ⏳ COOLDOWN CHECK
+// ==========================================
+// ⏳ NEUER COOLDOWN CHECK (Steuert die neue Box)
+// ==========================================
 setInterval(() => {
-    let modifier = parseInt(localStorage.getItem('cooldownModifier') || 0);
-    let effectiveCooldownMins = globalCooldownMins + modifier;
+    let pNum = localStorage.getItem('playerNum') || '1'; 
+    let modifier = parseInt(localStorage.getItem('cooldownModifier_' + pNum)) || 0;
+    
+    let effectiveCooldownMins = (globalCooldownMins || 0) + modifier;
     if(effectiveCooldownMins < 0) effectiveCooldownMins = 0; 
 
+    let cdBox = document.getElementById('dedicated-cooldown-display');
+    let submitBtn = document.querySelector('.btn-send');
+    let manualInput = document.getElementById('manual-code-input');
+
     if (effectiveCooldownMins > 0) {
-        let lastScan = localStorage.getItem('lastScanTime') || 0;
+        let lastScanStr = localStorage.getItem('lastScanTime_' + pNum);
+        let lastScan = lastScanStr ? parseInt(lastScanStr) : 0;
         let now = Date.now();
         let diff = (effectiveCooldownMins * 60000) - (now - lastScan);
         
-        let submitBtn = document.querySelector('.btn-send');
-        let manualInput = document.getElementById('manual-code-input');
-
         if (diff > 0) {
             let leftSecs = Math.ceil(diff / 1000);
             let m = Math.floor(leftSecs / 60);
             let s = leftSecs % 60;
-            document.getElementById('status').innerHTML = `⏳ Scanner blockiert! Bereit in: <b>${m}:${s < 10 ? '0':''}${s}</b>`;
-            document.getElementById('status').style.color = "#ff8800";
-            if(submitBtn) { submitBtn.disabled = true; submitBtn.style.opacity = "0.5"; }
+            
+            // 🚫 BLOCKIERT STATUS in der dicken Box
+            if(cdBox) {
+                cdBox.style.borderColor = "#ff4444";
+                cdBox.style.background = "rgba(255, 68, 68, 0.1)";
+                cdBox.style.color = "#ff4444";
+                cdBox.innerHTML = `⏳ SCANNER KÜHLT AB<br><span style="font-size:16px;">${m}:${s < 10 ? '0':''}${s}</span>`;
+            }
+            if(submitBtn) { submitBtn.disabled = true; submitBtn.style.opacity = "0.3"; }
             if(manualInput) { manualInput.disabled = true; }
+            
         } else {
-            localStorage.setItem('cooldownModifier', 0);
-            document.getElementById('status').innerHTML = "✅ Scanner bereit!";
-            document.getElementById('status').style.color = "#00ffcc";
+            // ✅ BEREIT STATUS (Nachdem er abgelaufen ist)
+            localStorage.setItem('cooldownModifier_' + pNum, 0);
+            if(cdBox) {
+                cdBox.style.borderColor = "#00ffcc";
+                cdBox.style.background = "rgba(0, 255, 204, 0.1)";
+                cdBox.style.color = "#00ffcc";
+                cdBox.innerHTML = `✅ BEREIT FÜR DEN NÄCHSTEN SCAN!`;
+            }
             if(submitBtn) { submitBtn.disabled = false; submitBtn.style.opacity = "1"; }
             if(manualInput) { manualInput.disabled = false; }
         }
     } else {
-        document.getElementById('status').innerHTML = "📍 GPS aktiv (Kein Cooldown)";
-        document.getElementById('status').style.color = "#aaa";
+        // ✅ KEIN COOLDOWN EINGESTELLT (0 Minuten)
+        if(cdBox) {
+            cdBox.style.borderColor = "#444";
+            cdBox.style.background = "#222";
+            cdBox.style.color = "#aaa";
+            cdBox.innerHTML = `Scanner dauerhaft aktiv (Kein Cooldown)`;
+        }
+        if(submitBtn) { submitBtn.disabled = false; submitBtn.style.opacity = "1"; }
+        if(manualInput) { manualInput.disabled = false; }
     }
 }, 1000);
 
+// ==========================================
+// 📍 LIVE SPIELER STANDORTE
+// ==========================================
 function fetchPlayers() {
     fetch('/api/location').then(res => res.json()).then(players => {
         playerLayer.clearLayers();
@@ -222,19 +334,29 @@ function fetchPlayers() {
 setInterval(updateMap, 3000); 
 updateMap();
 
-// GPS LOGIK
+// ==========================================
+// 📍 GPS LOGIK (Stört den Cooldown jetzt nicht mehr!)
+// ==========================================
 var myLocationMarker;
 window.startGPS = function() {
     const statusDiv = document.getElementById('status');
     if ("geolocation" in navigator) {
-        statusDiv.innerText = "GPS wird gesucht...";
+        if(statusDiv) statusDiv.innerText = "GPS wird gesucht...";
         navigator.geolocation.watchPosition((position) => {
-            statusDiv.innerText = "📍 GPS aktiv!";
+            
+            // GPS kriegt jetzt exklusiv das Status-Feld!
+            if(statusDiv) {
+                statusDiv.innerText = `📍 GPS aktiv!`;
+                statusDiv.style.color = "#00ccff";
+            }
+            
             if (myLocationMarker) map.removeLayer(myLocationMarker);
             myLocationMarker = L.circleMarker([position.coords.latitude, position.coords.longitude], { radius: 8, fillColor: "#00ccff", color: "#ffffff", weight: 3, fillOpacity: 1 }).addTo(map);
             
             fetch('/api/location', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: playerId, name: playerId, team: myTeam, lat: position.coords.latitude, lng: position.coords.longitude }) }).catch(e => e);
-        }, (e) => { statusDiv.innerText = "❌ Fehler: Bitte GPS im Browser erlauben!"; }, { enableHighAccuracy: true });
+        }, (e) => { 
+            if(statusDiv) statusDiv.innerText = "❌ Fehler: Bitte GPS erlauben!"; 
+        }, { enableHighAccuracy: true });
     }
 }
 
@@ -242,10 +364,10 @@ window.submitManualCode = function() {
     const inputField = document.getElementById('manual-code-input');
     let rawCode = inputField.value.trim().toUpperCase(); 
     if (!rawCode) { alert("Bitte gib einen Code ein!"); return; }
-    window.location.href = "/scan.html?code=" + encodeURIComponent(rawCode);
+    
+    window.location.href = `/scan.html?code=${encodeURIComponent(rawCode)}&player=${myPlayerNum}`;
 }
 
-// WIRTSCHAFT
 function fetchCoins() {
     fetch('/api/coins').then(res => res.json()).then(coins => {
         if(coins[myTeam] !== undefined) {
@@ -255,20 +377,16 @@ function fetchCoins() {
 }
 setInterval(fetchCoins, 10000); 
 
-// AUTO-START beim Aufrufen der Seite
 window.onload = function() {
-    document.getElementById('status').innerHTML = `<button onclick="startGPS()" style="background:var(--team-color); color:#000; padding:10px 20px; border:none; border-radius:8px; font-weight:bold; cursor:pointer; width:100%; font-size:14px; text-transform:uppercase;">📍 GPS Verbinden</button>`;
+    let statDiv = document.getElementById('status');
+    if(statDiv) statDiv.innerHTML = `<button onclick="startGPS()" style="background:var(--team-color); color:#000; padding:10px 20px; border:none; border-radius:8px; font-weight:bold; cursor:pointer; width:100%; font-size:14px; text-transform:uppercase;">📍 GPS Verbinden</button>`;
     fetchCoins();
 };
 
-// ==========================================
-// 📶 NATIVE NFC SCANNER VERLINKUNG
-// ==========================================
 window.addEventListener('DOMContentLoaded', () => {
     const manualScanDiv = document.getElementById('manual-scan');
     
     if (manualScanDiv) {
-        // Erschaffe den neuen NFC Button
         const nfcBtn = document.createElement('button');
         nfcBtn.innerHTML = "📶 NFC-Tag scannen";
         nfcBtn.className = "btn-send";
@@ -279,23 +397,27 @@ window.addEventListener('DOMContentLoaded', () => {
         nfcBtn.style.fontSize = "16px";
         
         nfcBtn.onclick = async function() {
-            // Prüft, ob das Handy Web-NFC unterstützt (z.B. Android Chrome)
             if ('NDEFReader' in window) {
                 try {
                     const ndef = new NDEFReader();
                     await ndef.scan();
                     
-                    document.getElementById('status').innerHTML = "📡 Scanner bereit! Halte dein Handy an den Tag.";
-                    document.getElementById('status').style.color = "#00ffcc";
+                    let statDiv = document.getElementById('status');
+                    if(statDiv) {
+                        statDiv.innerHTML = "📡 Halte dein Handy an den Tag.";
+                        statDiv.style.color = "#00ffcc";
+                    }
                     
                     ndef.addEventListener("reading", ({ message }) => {
                         const decoder = new TextDecoder();
                         for (const record of message.records) {
                             if (record.recordType === "url") {
-                                window.location.href = decoder.decode(record.data); // Leitet zum Tag-Link weiter
+                                let decodedUrl = decoder.decode(record.data);
+                                let sep = decodedUrl.includes('?') ? '&' : '?';
+                                window.location.href = `${decodedUrl}${sep}player=${myPlayerNum}`; 
                             } else if (record.recordType === "text") {
                                 let code = decoder.decode(record.data);
-                                window.location.href = "/scan.html?code=" + encodeURIComponent(code);
+                                window.location.href = `/scan.html?code=${encodeURIComponent(code)}&player=${myPlayerNum}`;
                             }
                         }
                     });
@@ -303,12 +425,10 @@ window.addEventListener('DOMContentLoaded', () => {
                     alert("⚠️ NFC Scanner Fehler: " + error);
                 }
             } else {
-                // Fallback für iPhones (Apple erlaubt Web-NFC aktuell nicht im Browser)
                 alert("ℹ️ Auf diesem Gerät/Browser passiert das Scannen automatisch im Hintergrund. Schließe dieses Menü und halte den NFC-Tag einfach direkt an die Oberkante deines Handys!");
             }
         };
         
-        // Fügt den Button oben ins "manuelle" Menü ein
         manualScanDiv.insertBefore(nfcBtn, manualScanDiv.firstChild);
     }
 });

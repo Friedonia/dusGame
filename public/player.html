@@ -18,22 +18,30 @@
             <div id="hud-content">
 
                 <div id="team-selector-container">
-                    <h3 style="margin-top:0; color:#aaa; font-size: 14px;">Wähle dein Team:</h3>
+                    <h3 style="margin-top:0; color:#aaa; font-size: 14px;">1. Wähle dein Team:</h3>
                     <div style="display: flex; gap: 8px; margin-bottom: 5px;">
-                        <button class="btn-send" style="background:#ff3333; color:white; flex:1;" onclick="setTeam('rot')">Rot</button>
-                        <button class="btn-send" style="background:#3366ff; color:white; flex:1;" onclick="setTeam('blau')">Blau</button>
+                        <button class="btn-send" style="background:#ff3333; color:white; flex:1;" onclick="selectTeam('rot')">Rot</button>
+                        <button class="btn-send" style="background:#3366ff; color:white; flex:1;" onclick="selectTeam('blau')">Blau</button>
                     </div>
                     <div style="display: flex; gap: 8px; margin-bottom: 15px;">
-                        <button class="btn-send" style="background:#33ff33; color:black; flex:1;" onclick="setTeam('gruen')">Grün</button>
-                        <button class="btn-send" style="background:#ffcc00; color:black; flex:1;" onclick="setTeam('gelb')">Gelb</button>
+                        <button class="btn-send" style="background:#33ff33; color:black; flex:1;" onclick="selectTeam('gruen')">Grün</button>
+                        <button class="btn-send" style="background:#ffcc00; color:black; flex:1;" onclick="selectTeam('gelb')">Gelb</button>
                     </div>
                 </div>
 
+<div id="debug-player-switch" style="position: fixed; bottom: 80px; left: 20px; background: rgba(0, 0, 0, 0.8); color: white; padding: 10px; border-radius: 8px; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.3); display: flex; align-items: center; gap: 8px;">
+  <div style="font-size: 14px; font-weight: bold; color: #aaa;">🛠 Troubleshooting:</div>
+  <button onclick="changePlayer(1)" style="padding: 6px 10px; cursor: pointer; border-radius: 4px; border: none; font-weight: bold; background: #eee; color: #000;">Spieler 1</button>
+  <button onclick="changePlayer(2)" style="padding: 6px 10px; cursor: pointer; border-radius: 4px; border: none; font-weight: bold; background: #eee; color: #000;">Spieler 2</button>
+  <button onclick="changePlayer(3)" style="padding: 6px 10px; cursor: pointer; border-radius: 4px; border: none; font-weight: bold; background: #eee; color: #000;">Spieler 3</button>
+</div>
+
                 <div id="player-controls" style="display: none;">
                     <div id="coin-display">💰 Kasse: <span id="team-coins-val">0</span> Coins</div>
-                    <div id="status">Warte auf GPS...</div>
+                    <button id="start-gps-btn" class="btn-send" style="width: 100%; margin-bottom: 10px; background: var(--team-color); color: #000;" onclick="startGPS()">📍 GPS Verbinden</button>
+                    <div id="cooldown-status">⏳ Lade Scanner...</div>
                     <div id="manual-scan">
-                        <p>NFC defekt? Code hier tippen:</p>
+                        <p style="margin-bottom: 8px;">NFC defekt? Code hier tippen:</p>
                         <div class="input-group">
                             <input type="text" id="manual-code-input" placeholder="TR#1234#56" autocomplete="off">
                             <button class="btn-send" onclick="submitManualCode()">Senden</button>
@@ -56,7 +64,12 @@
     </div>
 
     <div id="map"></div>
-
+<div id="debug-player-switch" style="position: fixed; bottom: 20px; left: 20px; background: rgba(0, 0, 0, 0.8); color: white; padding: 10px; border-radius: 8px; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+  <div style="font-size: 12px; margin-bottom: 8px; color: #aaa;">🛠 Troubleshooting</div>
+  <button onclick="changePlayer(1)" style="margin-right: 5px; padding: 5px 10px; cursor: pointer;">Spieler 1</button>
+  <button onclick="changePlayer(2)" style="margin-right: 5px; padding: 5px 10px; cursor: pointer;">Spieler 2</button>
+  <button onclick="changePlayer(3)" style="padding: 5px 10px; cursor: pointer;">Spieler 3</button>
+</div>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="player.js"></script>
 </body>

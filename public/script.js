@@ -190,7 +190,6 @@ function generateZonePopupContent(props) {
     let lockState = props.locked ? "<span style='color:#ff4444;'>Gesperrt</span>" : "<span style='color:#33ff33;'>Aktiv</span>";
     let btnText = props.locked ? "🔓 Zone entsperren" : "🔒 Zone sperren";
     
-    // 🛒 Check ob eine Falle oder ein Buff auf der Zone liegt
     let itemStatus = "<span style='color:#888;'>Keine</span>";
     if (props.trap) {
         itemStatus = `<span style='color:#ff8800; font-weight:bold;'>🪤 Falle (Team ${props.trap.toUpperCase()})</span>`;
@@ -214,7 +213,6 @@ window.toggleZoneLock = function(code) {
             props.locked = !props.locked;
             applyZoneStyle(layer);
             
-            // Falls das Popup gerade offen ist, müssen wir es aktualisieren
             if (layer.getPopup()) {
                 layer.setPopupContent(generateZonePopupContent(props));
             }
@@ -256,10 +254,9 @@ window.updateTagVisibility = function(tagId, isVisible) {
 };
 
 // ==========================================
-// 🎨 EDITIER LOGIK (VERBESSERT: Kein Popup bei Linksklick)
+// 🎨 EDITIER LOGIK 
 // ==========================================
 function makeEditable(layer) {
-    // LINKSKLICK = Nur umfärben (KEIN Popup)
     layer.on('click', function(e) {
         L.DomEvent.stopPropagation(e); 
         
@@ -279,7 +276,6 @@ function makeEditable(layer) {
         
         applyZoneStyle(layer); 
         
-        // Optisches Feedback beim Klicken (kurzes Aufblinken)
         layer.setStyle({fillOpacity: 0.9});
         setTimeout(() => applyZoneStyle(layer), 200);
         
@@ -287,15 +283,11 @@ function makeEditable(layer) {
         updateStatistics();
     });
 
-    // RECHTSKLICK = Popup öffnen
     layer.on('contextmenu', function(e) {
         L.DomEvent.stopPropagation(e);
-        // Wir "binden" das Popup nur für den Bruchteil einer Sekunde und öffnen es direkt
         layer.bindPopup(generateZonePopupContent(layer.feature.properties)).openPopup(e.latlng);
     });
 
-    // WICHTIG: Sobald das Popup wieder geschlossen wird, entfernen wir die Bindung. 
-    // Dadurch wird verhindert, dass spätere Linksklicks das Popup versehentlich wieder auslösen!
     layer.on('popupclose', function() {
         layer.unbindPopup();
     });
@@ -325,7 +317,6 @@ map.on(L.Draw.Event.CREATED, function (event) {
         feature.properties.locked = false; 
         
         applyZoneStyle(layer);
-        // HIER WURDE BIND POPUP ENTFERNT
         makeEditable(layer);
         drawnItems.addLayer(layer);
 
@@ -400,15 +391,21 @@ function loadZonesFromServer() {
                 shopToggle.checked = data.gameSettings.shopEnabled;
             }
 
-            let cooldownInput = document.getElementById('cooldown-input');
-            if (cooldownInput && document.activeElement !== cooldownInput) {
-                cooldownInput.value = data.gameSettings.playerCooldown || 0;
-            }
-
             let payoutInput = document.getElementById('payout-interval-input');
             if (payoutInput && data.gameSettings.payoutInterval !== undefined && document.activeElement !== payoutInput) {
                 payoutInput.value = data.gameSettings.payoutInterval;
             }
+
+            // Team Cooldowns laden
+            if (data.gameSettings.teamCooldowns) {
+                if (document.getElementById('cd-rot') && document.activeElement !== document.getElementById('cd-rot')) document.getElementById('cd-rot').value = data.gameSettings.teamCooldowns.rot || 0;
+                if (document.getElementById('cd-blau') && document.activeElement !== document.getElementById('cd-blau')) document.getElementById('cd-blau').value = data.gameSettings.teamCooldowns.blau || 0;
+                if (document.getElementById('cd-gruen') && document.activeElement !== document.getElementById('cd-gruen')) document.getElementById('cd-gruen').value = data.gameSettings.teamCooldowns.gruen || 0;
+                if (document.getElementById('cd-gelb') && document.activeElement !== document.getElementById('cd-gelb')) document.getElementById('cd-gelb').value = data.gameSettings.teamCooldowns.gelb || 0;
+            }
+
+            // Reset-Signal auslesen
+            if (data.gameSettings.cooldownResetTime) window.globalCooldownResetTime = data.gameSettings.cooldownResetTime;
 
             gameEndTime = data.gameSettings.endTime || null;
             gameAnnouncement = data.gameSettings.announcement || null;
@@ -429,7 +426,6 @@ function loadZonesFromServer() {
                 onEachFeature: function (feature, layer) {
                     if (feature.properties.type === "zone") {
                         if (!feature.properties.code || !feature.properties.code.includes('#')) { feature.properties.code = generateSpecialCode(); needsSave = true; }
-                        // HIER WURDE BIND POPUP ENTFERNT
                         applyZoneStyle(layer); 
                         makeEditable(layer);
                     } else if (feature.properties.type === "nfc-tag") {
@@ -469,7 +465,57 @@ function updateLiveLocations() {
 setInterval(updateLiveLocations, 5000);
 
 // ==========================================
-// 💾 SPEICHERN
+// ⏳ LIVE SPIELER-COOLDOWNS IM ADMIN-PANEL
+// ==========================================
+function updateAdminCooldowns() {
+    fetch('/api/admin/cooldown-states?t=' + new Date().getTime())
+        .then(res => res.json())
+        .then(data => {
+            const container = document.getElementById('cooldown-live-view');
+            // Bricht ab, falls du das HTML-Element noch nicht in die admin.html eingefügt hast
+            if (!container) return; 
+
+            container.innerHTML = ''; 
+            const now = Date.now();
+            const colors = { rot: '#ff3333', blau: '#3366ff', gruen: '#33ff33', gelb: '#ffcc00' };
+
+            for (let team in data.states) {
+                // Liest die Zeit priorisiert direkt aus deinen Eingabefeldern im Admin-Panel ab
+                let cdInput = document.getElementById('cd-' + team);
+                let durationMins = cdInput ? parseInt(cdInput.value) : (data.durations[team] || 0);
+                let durationMs = durationMins * 60000;
+                
+                let teamHtml = `<div style="margin-bottom: 10px; padding: 5px; border-left: 4px solid ${colors[team] || '#aaa'};">
+                                  <strong>Team ${team.toUpperCase()}</strong> (${durationMins} Min)<br>`;
+
+                for (let playerNum in data.states[team]) {
+                    let lastScan = data.states[team][playerNum].lastScan;
+                    let diff = durationMs - (now - lastScan);
+                    let statusText = "";
+
+                    if (lastScan === 0 || diff <= 0 || durationMs === 0) {
+                        statusText = `<span style="color: #00ffcc;">Bereit</span>`;
+                    } else {
+                        let leftSecs = Math.ceil(diff / 1000);
+                        let m = Math.floor(leftSecs / 60);
+                        let s = leftSecs % 60;
+                        statusText = `<span style="color: #ff8800;">Blockiert (${m}:${s < 10 ? '0':''}${s})</span>`;
+                    }
+                    
+                    teamHtml += `<div style="font-size: 13px; margin-left: 10px;">Sp. ${playerNum}: ${statusText}</div>`;
+                }
+                teamHtml += `</div>`;
+                container.innerHTML += teamHtml;
+            }
+        }).catch(err => console.log("Live-Cooldown Update Fehler (Admin-Panel):", err));
+}
+
+// Ruft die Cooldowns jede Sekunde ab
+setInterval(updateAdminCooldowns, 1000);
+
+
+// ==========================================
+// 💾 SPEICHERN & RESET-BEFEHLE
 // ==========================================
 function saveZones() {
     var geoJsonData = drawnItems.toGeoJSON();
@@ -477,8 +523,12 @@ function saveZones() {
     let toggleRadar = document.getElementById('global-radar-toggle');
     let toggleFreeze = document.getElementById('global-freeze-toggle');
     let toggleShop = document.getElementById('global-shop-toggle');
-    let cooldownVal = document.getElementById('cooldown-input'); 
     let payoutVal = document.getElementById('payout-interval-input');
+    
+    let cdRot = document.getElementById('cd-rot');
+    let cdBlau = document.getElementById('cd-blau');
+    let cdGruen = document.getElementById('cd-gruen');
+    let cdGelb = document.getElementById('cd-gelb');
     
     geoJsonData.gameSettings = {
         showPlayers: toggleRadar ? toggleRadar.checked : false,
@@ -486,13 +536,35 @@ function saveZones() {
         shopEnabled: toggleShop ? toggleShop.checked : true,
         endTime: gameEndTime,
         announcement: gameAnnouncement,
-        playerCooldown: cooldownVal ? parseInt(cooldownVal.value) : 0,
-        payoutInterval: payoutVal ? parseInt(payoutVal.value) : 45 
+        teamCooldowns: {
+            rot: cdRot ? parseInt(cdRot.value) : 0,
+            blau: cdBlau ? parseInt(cdBlau.value) : 0,
+            gruen: cdGruen ? parseInt(cdGruen.value) : 0,
+            gelb: cdGelb ? parseInt(cdGelb.value) : 0
+        },
+        payoutInterval: payoutVal ? parseInt(payoutVal.value) : 45,
+        cooldownResetTime: window.globalCooldownResetTime || 0
     };
     
     fetch('/api/zones', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geoJsonData) })
     .then(res => res.json()).then(data => console.log("Auto-Save erfolgreich!")).catch(err => err);
 }
+
+// 🔄 NEUE RESET-FUNKTION: Kommuniziert direkt mit der Server API
+window.resetAllCooldowns = function() {
+    if(confirm("⚠️ Sollen die aktiven Cooldown-Sperren ALLER Spieler auf der Straße JETZT sofort beendet werden?")) {
+        fetch('/api/reset-cooldowns', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                // Wir speichern die Reset-Zeit, damit die Handys das Signal beim nächsten Ping erkennen
+                window.globalCooldownResetTime = data.resetTime; 
+                saveZones(); 
+                alert("✅ Signal gesendet! Alle Scanner sind in wenigen Sekunden wieder bereit.");
+                updateAdminCooldowns(); // UI sofort aktualisieren
+            })
+            .catch(err => alert("Fehler beim Reset: " + err));
+    }
+};
 
 // ==========================================
 // 💸 WIRTSCHAFT MANUELL VERWALTEN & ANZEIGEN

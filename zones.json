@@ -510,7 +510,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#808080",
+        "color": "#3366ff",
         "type": "zone",
         "code": "TM#8862#37",
         "level": 1
@@ -1002,7 +1002,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#808080",
+        "color": "#ff3333",
         "type": "zone",
         "code": "NI#5614#22",
         "level": 1
@@ -1100,7 +1100,8 @@
       "properties": {
         "color": "#808080",
         "type": "zone",
-        "code": "TI#6165#25"
+        "code": "TI#6165#25",
+        "level": 0
       },
       "geometry": {
         "type": "Polygon",
@@ -1242,7 +1243,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#808080",
+        "color": "#ffcc00",
         "type": "zone",
         "code": "RM#3929#31",
         "level": 1
@@ -1885,7 +1886,8 @@
         "color": "#ff3333",
         "type": "zone",
         "code": "EI#8705#23",
-        "level": 1
+        "level": 1,
+        "buff": "rot"
       },
       "geometry": {
         "type": "Polygon",
@@ -2692,13 +2694,19 @@
   "gameSettings": {
     "showPlayers": false,
     "gamePaused": false,
-    "shopEnabled": true,
+    "shopEnabled": false,
     "endTime": null,
     "announcement": {
       "text": "IHR HABT NOCH 10 MINUTRN",
       "timestamp": 1775241112489
     },
-    "playerCooldown": 1,
-    "payoutInterval": 45
+    "teamCooldowns": {
+      "rot": 5,
+      "blau": 5,
+      "gruen": 5,
+      "gelb": 5
+    },
+    "payoutInterval": 45,
+    "cooldownResetTime": 1775242288194
   }
 }
