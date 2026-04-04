@@ -42,7 +42,7 @@
         
         #sidebar-header h2 { margin: 0; font-size: 18px; color: #aaa; text-transform: uppercase; letter-spacing: 1px; }
 
-        .team-list { padding: 15px; flex: 1; }
+        .team-list { padding: 15px; flex: 1; overflow-y: auto; }
 
         .team-btn { 
             display: block; 
@@ -68,8 +68,15 @@
         .active-gruen { background: rgba(51, 255, 51, 0.15) !important; border-color: var(--gruen) !important; color: var(--gruen) !important; }
         .active-gelb { background: rgba(255, 204, 0, 0.15) !important; border-color: var(--gelb) !important; color: var(--gelb) !important; }
 
+        /* Sidebar Footer mit Reset und Zurück-Button */
+        .sidebar-footer {
+            padding: 15px;
+            background: #111;
+            border-top: 1px solid #333;
+        }
+
         .back-btn {
-            margin: 15px;
+            width: 100%;
             padding: 15px;
             background: #444;
             border: none;
@@ -78,8 +85,23 @@
             font-weight: bold;
             cursor: pointer;
             text-transform: uppercase;
+            margin-bottom: 10px;
         }
-        .back-btn:hover { background: #ff4444; }
+        .back-btn:hover { background: #555; }
+
+        .reset-btn {
+            width: 100%;
+            padding: 12px;
+            background: #ff4444;
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-size: 13px;
+        }
+        .reset-btn:hover { background: #cc0000; }
 
         /* CHAT BEREICH */
         #chat-area { 
@@ -115,10 +137,10 @@
         /* Chat Bubbles */
         .msg-container { display: flex; flex-direction: column; max-width: 70%; }
         .msg-container.player { align-self: flex-start; }
-        .msg-container.admin { align-self: flex-end; }
+        .msg-container.Handler { align-self: flex-end; }
 
         .msg-sender { font-size: 11px; color: #888; margin-bottom: 4px; padding: 0 5px; }
-        .admin .msg-sender { text-align: right; color: #00ffcc; }
+        .Handler .msg-sender { text-align: right; color: #00ffcc; }
 
         .msg-bubble { 
             padding: 12px 18px; 
@@ -126,6 +148,7 @@
             font-size: 15px; 
             line-height: 1.4;
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            word-wrap: break-word;
         }
 
         /* Farbige Bubbles für Spieler */
@@ -136,7 +159,7 @@
         .player-gelb .msg-bubble { border-left: 4px solid var(--gelb); }
 
         /* Bubble für Admin */
-        .admin .msg-bubble { 
+        .Handler .msg-bubble { 
             background: #005a4e; /* Dunkles Türkis */
             color: #fff; 
             border-top-right-radius: 4px; 
@@ -192,7 +215,11 @@
             <button id="btn-gruen" class="team-btn" onclick="selectTeam('gruen')">🟢 Team Grün</button>
             <button id="btn-gelb" class="team-btn" onclick="selectTeam('gelb')">🟡 Team Gelb</button>
         </div>
-        <button class="back-btn" onclick="window.location.href='/index.html'">🗺️ Admin Karte</button>
+        
+        <div class="sidebar-footer">
+            <button class="back-btn" onclick="window.location.href='/index.html'">🗺️ Admin Karte</button>
+            <button class="reset-btn" onclick="resetChat()">🗑️ Verlauf leeren</button>
+        </div>
     </div>
 
     <div id="chat-area">
@@ -245,20 +272,28 @@
             const text = input.value.trim();
             if (!text) return;
 
-            // WICHTIG: Angepasst an die player.js (sendet an /api/chat und nutzt "message" statt "text")
             fetch('/api/chat', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ 
-                    sender: 'HQ (Admin)', 
+                    sender: 'Hendler', 
                     team: currentTeam, 
                     message: text,
-                    type: 'admin' 
+                    type: 'Handler' 
                 })
-            }).then(() => {
-                input.value = '';
-                loadMessages(true);
-            }).catch(err => console.error("Fehler beim Senden:", err));
+            })
+            .then(res => {
+                if(!res.ok) throw new Error("Server antwortet nicht richtig.");
+                return res.json();
+            })
+            .then(() => {
+                input.value = ''; // Textfeld leeren
+                loadMessages(true); // Direkt neu laden
+            })
+            .catch(err => {
+                alert("Verbindung zum Server verloren! Ist er abgestürzt?");
+                console.error(err);
+            });
         }
 
         // 3. NACHRICHTEN LADEN
@@ -281,13 +316,13 @@
                     msgDiv.innerHTML = ''; // Leeren
 
                     teamMsgs.forEach(m => {
-                        const isPlayer = m.type !== 'admin';
+                        const isPlayer = m.type !== 'Handler';
                         // Berücksichtige den "message" (neu) und "text" (alt) Parameter zur Sicherheit
                         const msgText = m.message || m.text || ''; 
                         
                         // Container aufbauen (Links = Spieler, Rechts = Admin)
                         const wrapper = document.createElement('div');
-                        wrapper.className = `msg-container ${isPlayer ? 'player player-' + m.team : 'admin'}`;
+                        wrapper.className = `msg-container ${isPlayer ? 'player player-' + m.team : 'Handler'}`;
                         
                         wrapper.innerHTML = `
                             <div class="msg-sender">${m.sender}</div>
@@ -303,6 +338,25 @@
                     }
                 }).catch(err => console.log("Warte auf Chat-Server..."));
         }
+
+        // 4. CHAT RESETTEN
+        window.resetChat = function() {
+            if (confirm("⚠️ WARNUNG: Möchtest du wirklich den gesamten Chat-Verlauf für ALLE Teams unwiderruflich löschen?")) {
+                fetch('/api/chat/reset', { method: 'POST' })
+                    .then(res => {
+                        if(!res.ok) throw new Error("Die Reset-Route fehlt in der server.js!");
+                        return res.json();
+                    })
+                    .then(data => {
+                        if(data.success) {
+                            alert("✅ Der Chat-Verlauf wurde komplett geleert!");
+                            lastMessageCount = 0;
+                            document.getElementById('messages').innerHTML = '';
+                        }
+                    })
+                    .catch(err => alert("❌ Fehler beim Löschen des Chats:\n" + err.message));
+            }
+        };
 
         // Alle 2 Sek. auf neue Nachrichten prüfen
         setInterval(() => loadMessages(false), 2000); 

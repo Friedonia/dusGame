@@ -120,6 +120,10 @@ window.toggleHud = function() {
     }
 }
 
+
+// ==========================================
+// 💬 CHAT-SYSTEM (Spieler)
+// ==========================================
 let chatOpen = false;
 window.toggleChat = function() {
     const widget = document.getElementById('chat-widget');
@@ -127,25 +131,84 @@ window.toggleChat = function() {
     if (chatOpen) {
         widget.classList.add('open');
         document.getElementById('chat-badge').style.display = 'none'; 
+        loadPlayerChat(true); // Direkt beim Öffnen nach unten scrollen
     } else {
         widget.classList.remove('open');
     }
 }
 
+// Nachricht senden
 window.sendChat = function() {
     const input = document.getElementById('chat-message-input');
     const msg = input.value.trim();
     if (!msg) return;
     
-    const msgDiv = document.createElement('div');
-    msgDiv.className = 'msg self';
-    msgDiv.innerText = msg;
-    document.getElementById('chat-messages').appendChild(msgDiv);
-    document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;
-    input.value = '';
+    input.value = ''; // Feld sofort leeren
 
-    fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sender: playerId, team: myTeam, message: msg, type: 'player' }) }).catch(err => err);
+    // Wir malen die Nachricht NICHT mehr manuell rein, sondern senden sie an den Server.
+    // Der Server schickt sie uns dann beim nächsten 2-Sekunden-Check offiziell zurück.
+    fetch('/api/chat', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ sender: `Sp. ${myPlayerNum}`, team: myTeam, message: msg, type: 'player' }) 
+    }).then(() => loadPlayerChat(true)).catch(err => err);
 }
+
+// Nachrichten vom Server abrufen
+let lastPlayerMsgCount = 0;
+
+function loadPlayerChat(forceScroll = false) {
+    fetch('/api/chat?t=' + new Date().getTime())
+        .then(res => res.json())
+        .then(allMsgs => {
+            // Nur Nachrichten für mein Team oder globale ("all") filtern
+            const teamMsgs = allMsgs.filter(m => m.team === myTeam || m.team === 'all');
+            
+            // Wenn keine neue Nachricht da ist, müssen wir nichts neu zeichnen
+            if (!forceScroll && teamMsgs.length === lastPlayerMsgCount) return;
+            
+            // Notification-Badge anzeigen, wenn Chat zu ist und neue Nachrichten kommen
+            if (!chatOpen && teamMsgs.length > lastPlayerMsgCount && lastPlayerMsgCount !== 0) {
+                let badge = document.getElementById('chat-badge');
+                if(badge) badge.style.display = 'block';
+            }
+            
+            lastPlayerMsgCount = teamMsgs.length;
+            const chatBox = document.getElementById('chat-messages');
+            if(!chatBox) return;
+            
+            chatBox.innerHTML = ''; // Leeren
+
+            teamMsgs.forEach(m => {
+                const msgDiv = document.createElement('div');
+                
+                // Design für Admin vs. Ich vs. Teamkollege
+                if (m.type === 'admin') {
+                    msgDiv.className = 'msg admin-msg';
+                    msgDiv.style.cssText = "background: #005a4e; color: white; padding: 8px; border-radius: 5px; margin-bottom: 5px; border-left: 3px solid #00ffcc;";
+                    msgDiv.innerHTML = `<b style="color:#00ffcc; font-size:11px; display:block;">${m.sender}</b> ${m.message}`;
+                } else if (m.sender === `Sp. ${myPlayerNum}`) {
+                    msgDiv.className = 'msg self';
+                    msgDiv.style.cssText = "background: #444; color: white; padding: 8px; border-radius: 5px; margin-bottom: 5px; text-align: right;";
+                    msgDiv.innerHTML = `<b style="color:#aaa; font-size:11px; display:block;">Ich</b> ${m.message}`;
+                } else {
+                    msgDiv.className = 'msg other';
+                    msgDiv.style.cssText = "background: #222; color: white; padding: 8px; border-radius: 5px; margin-bottom: 5px;";
+                    msgDiv.innerHTML = `<b style="color:var(--team-color); font-size:11px; display:block;">${m.sender}</b> ${m.message}`;
+                }
+                chatBox.appendChild(msgDiv);
+            });
+
+            // Automatisch nach unten scrollen
+            if (forceScroll || chatBox.scrollTop + chatBox.clientHeight >= chatBox.scrollHeight - 50) {
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }
+        }).catch(err => console.log("Chat offline."));
+}
+
+// Alle 2 Sekunden Chat checken
+setInterval(() => loadPlayerChat(false), 2000);
+loadPlayerChat(true);
 
 // KARTE LADEN
 var map = L.map('map', { zoomControl: false }).setView([51.2277, 6.7735], 13.2);
