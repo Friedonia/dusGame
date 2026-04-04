@@ -122,7 +122,7 @@ window.toggleHud = function() {
 
 
 // ==========================================
-// 💬 CHAT-SYSTEM (Spieler)
+// 💬 CHAT-SYSTEM (Spieler) - MIT VERSION POLLING
 // ==========================================
 let chatOpen = false;
 window.toggleChat = function() {
@@ -131,22 +131,19 @@ window.toggleChat = function() {
     if (chatOpen) {
         widget.classList.add('open');
         document.getElementById('chat-badge').style.display = 'none'; 
-        loadPlayerChat(true); // Direkt beim Öffnen nach unten scrollen
+        loadPlayerChat(true); 
     } else {
         widget.classList.remove('open');
     }
 }
 
-// Nachricht senden
 window.sendChat = function() {
     const input = document.getElementById('chat-message-input');
     const msg = input.value.trim();
     if (!msg) return;
     
-    input.value = ''; // Feld sofort leeren
+    input.value = ''; 
 
-    // Wir malen die Nachricht NICHT mehr manuell rein, sondern senden sie an den Server.
-    // Der Server schickt sie uns dann beim nächsten 2-Sekunden-Check offiziell zurück.
     fetch('/api/chat', { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
@@ -154,18 +151,22 @@ window.sendChat = function() {
     }).then(() => loadPlayerChat(true)).catch(err => err);
 }
 
-// Nachrichten vom Server abrufen
 let lastPlayerMsgCount = 0;
+let currentChatVersion = 0; // NEU: Merkt sich den Chat-Stand!
 
 function loadPlayerChat(forceScroll = false) {
-    fetch('/api/chat?t=' + new Date().getTime())
+    fetch('/api/chat?v=' + currentChatVersion)
         .then(res => res.json())
-        .then(allMsgs => {
+        .then(response => {
+            // SERVER SAGT: NICHTS NEUES! -> Wir sparen Traffic und brechen ab.
+            if (response.unchanged) return; 
+
+            // SERVER SAGT: NEUE NACHRICHTEN DA!
+            currentChatVersion = response.version;
+            const allMsgs = response.messages;
+
             // Nur Nachrichten für mein Team oder globale ("all") filtern
             const teamMsgs = allMsgs.filter(m => m.team === myTeam || m.team === 'all');
-            
-            // Wenn keine neue Nachricht da ist, müssen wir nichts neu zeichnen
-            if (!forceScroll && teamMsgs.length === lastPlayerMsgCount) return;
             
             // Notification-Badge anzeigen, wenn Chat zu ist und neue Nachrichten kommen
             if (!chatOpen && teamMsgs.length > lastPlayerMsgCount && lastPlayerMsgCount !== 0) {
@@ -206,7 +207,6 @@ function loadPlayerChat(forceScroll = false) {
         }).catch(err => console.log("Chat offline."));
 }
 
-// Alle 2 Sekunden Chat checken
 setInterval(() => loadPlayerChat(false), 2000);
 loadPlayerChat(true);
 
@@ -218,12 +218,26 @@ var zoneLayer = L.layerGroup().addTo(map);
 var playerLayer = L.layerGroup().addTo(map);
 var nfcIcon = L.divIcon({ className: 'custom-nfc-marker', html: '<div style="background-color: #ff8800; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 8px #ff8800;"></div>', iconSize: [20, 20], iconAnchor: [10, 10] });
 
+// ==========================================
+// 🔄 MAP UPDATE LOGIK (MIT VERSION POLLING!)
+// ==========================================
 let lastAnnouncementTime = 0; 
 let timerInterval = null;
 let globalCooldownMins = 0; 
+let currentMapVersion = 0; // Speichert den Versions-Stand!
 
 function updateMap() {
-    fetch('/api/zones').then(res => res.json()).then(data => {
+    // Schickt die aktuelle Version ans Backend
+    fetch('/api/zones?v=' + currentMapVersion).then(res => res.json()).then(response => {
+        
+        // SERVER SAGT: NICHTS NEUES! Wir brechen hier sofort ab.
+        if (response.unchanged) {
+            return; 
+        }
+
+        // SERVER SAGT: NEUE DATEN!
+        currentMapVersion = response.version;
+        let data = response.data;
         
         if (data.gameSettings && data.gameSettings.announcement) { 
             if (data.gameSettings.announcement.timestamp > lastAnnouncementTime) {
@@ -264,13 +278,12 @@ function updateMap() {
             document.getElementById('coin-display').style.display = 'block';
         }
 
-        // RESET-SIGNAL PRÜFEN (Abwärtskompatibel zu alten Keys)
+        // RESET-SIGNAL PRÜFEN
         if (data.gameSettings && data.gameSettings.cooldownResetTime) {
             let lastScan = parseInt(localStorage.getItem(`lastScanTime_${myTeam}_${myPlayerNum}`) || localStorage.getItem(`lastScanTime_${myPlayerNum}`)) || 0;
             if (data.gameSettings.cooldownResetTime > lastScan) {
                 localStorage.setItem(`lastScanTime_${myTeam}_${myPlayerNum}`, 0);
                 localStorage.setItem(`cooldownModifier_${myTeam}_${myPlayerNum}`, 0);
-                // Alte Keys sicherheitshalber auch nullen
                 localStorage.setItem(`lastScanTime_${myPlayerNum}`, 0);
                 localStorage.setItem(`cooldownModifier_${myPlayerNum}`, 0);
             }
@@ -319,8 +332,6 @@ function updateMap() {
 window.isCooldownActive = false;
 
 setInterval(() => {
-    // WICHTIG: Nutzt jetzt die festen Variablen (myTeam, myPlayerNum),
-    // anstatt jede Sekunde den geteilten Tab-Speicher abzufragen!
     let pNum = myPlayerNum; 
     let tName = myTeam; 
     
@@ -357,7 +368,7 @@ setInterval(() => {
         } else {
             window.isCooldownActive = false;
             localStorage.setItem(`cooldownModifier_${tName}_${pNum}`, 0);
-            localStorage.setItem(`cooldownModifier_${pNum}`, 0); // Cleanup für alte Version
+            localStorage.setItem(`cooldownModifier_${pNum}`, 0); 
             
             if(cdBox) {
                 cdBox.style.borderColor = "#00ffcc";
@@ -380,6 +391,7 @@ setInterval(() => {
         if(manualInput) { manualInput.disabled = false; }
     }
 }, 1000);
+
 // ==========================================
 // 📍 LIVE SPIELER STANDORTE
 // ==========================================
@@ -395,6 +407,7 @@ function fetchPlayers() {
     }).catch(err => err);
 }
 
+// LÄDT DIE KARTE ALLE 3 SEKUNDEN (Mit Version-Check fast ohne Traffic!)
 setInterval(updateMap, 3000); 
 updateMap();
 

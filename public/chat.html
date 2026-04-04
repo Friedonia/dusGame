@@ -68,31 +68,19 @@
         .active-gruen { background: rgba(51, 255, 51, 0.15) !important; border-color: var(--gruen) !important; color: var(--gruen) !important; }
         .active-gelb { background: rgba(255, 204, 0, 0.15) !important; border-color: var(--gelb) !important; color: var(--gelb) !important; }
 
-        /* Sidebar Footer mit Reset und Zurück-Button */
+        /* Sidebar Footer mit Reset, Reload und Zurück-Button */
         .sidebar-footer {
             padding: 15px;
             background: #111;
             border-top: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
 
-        .back-btn {
-            width: 100%;
-            padding: 15px;
-            background: #444;
-            border: none;
-            border-radius: 8px;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-            text-transform: uppercase;
-            margin-bottom: 10px;
-        }
-        .back-btn:hover { background: #555; }
-
-        .reset-btn {
+        .action-btn {
             width: 100%;
             padding: 12px;
-            background: #ff4444;
             border: none;
             border-radius: 8px;
             color: white;
@@ -100,7 +88,16 @@
             cursor: pointer;
             text-transform: uppercase;
             font-size: 13px;
+            transition: background 0.2s;
         }
+        
+        .back-btn { background: #444; padding: 15px; font-size: 14px; margin-bottom: 5px; }
+        .back-btn:hover { background: #555; }
+
+        .reload-btn { background: #3366ff; }
+        .reload-btn:hover { background: #1a4ce6; }
+
+        .reset-btn { background: #ff4444; }
         .reset-btn:hover { background: #cc0000; }
 
         /* CHAT BEREICH */
@@ -108,7 +105,7 @@
             flex: 1; 
             display: flex; 
             flex-direction: column; 
-            background: url('data:image/svg+xml;utf8,<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg"><circle cx="2" cy="2" r="1" fill="%23222"/></svg>'); /* Leichte Punkt-Textur */
+            background: url('data:image/svg+xml;utf8,<svg width="20" height="20" xmlns="http://www.w3.org/2000/svg"><circle cx="2" cy="2" r="1" fill="%23222"/></svg>');
         }
 
         #chat-header {
@@ -129,18 +126,16 @@
             gap: 15px;
         }
 
-        /* Scrollbar Styling */
         #messages::-webkit-scrollbar { width: 8px; }
         #messages::-webkit-scrollbar-track { background: #111; }
         #messages::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
 
-        /* Chat Bubbles */
         .msg-container { display: flex; flex-direction: column; max-width: 70%; }
         .msg-container.player { align-self: flex-start; }
-        .msg-container.Handler { align-self: flex-end; }
+        .msg-container.admin { align-self: flex-end; }
 
         .msg-sender { font-size: 11px; color: #888; margin-bottom: 4px; padding: 0 5px; }
-        .Handler .msg-sender { text-align: right; color: #00ffcc; }
+        .admin .msg-sender { text-align: right; color: #00ffcc; }
 
         .msg-bubble { 
             padding: 12px 18px; 
@@ -151,16 +146,14 @@
             word-wrap: break-word;
         }
 
-        /* Farbige Bubbles für Spieler */
         .player .msg-bubble { background: #2c2c2c; border-top-left-radius: 4px; }
         .player-rot .msg-bubble { border-left: 4px solid var(--rot); }
         .player-blau .msg-bubble { border-left: 4px solid var(--blau); }
         .player-gruen .msg-bubble { border-left: 4px solid var(--gruen); }
         .player-gelb .msg-bubble { border-left: 4px solid var(--gelb); }
 
-        /* Bubble für Admin */
-        .Handler .msg-bubble { 
-            background: #005a4e; /* Dunkles Türkis */
+        .admin .msg-bubble { 
+            background: #005a4e; 
             color: #fff; 
             border-top-right-radius: 4px; 
             border-right: 4px solid #00ffcc;
@@ -214,11 +207,13 @@
             <button id="btn-blau" class="team-btn" onclick="selectTeam('blau')">🔵 Team Blau</button>
             <button id="btn-gruen" class="team-btn" onclick="selectTeam('gruen')">🟢 Team Grün</button>
             <button id="btn-gelb" class="team-btn" onclick="selectTeam('gelb')">🟡 Team Gelb</button>
+            <button id="btn-all" class="team-btn" onclick="selectTeam('all')" style="margin-top: 15px; border-color:#fff;">📢 An Alle Senden</button>
         </div>
         
         <div class="sidebar-footer">
-            <button class="back-btn" onclick="window.location.href='/index.html'">🗺️ Admin Karte</button>
-            <button class="reset-btn" onclick="resetChat()">🗑️ Verlauf leeren</button>
+            <button class="action-btn back-btn" onclick="window.location.href='/index.html'">🗺️ Admin Karte</button>
+            <button class="action-btn reload-btn" onclick="forceReloadChat()">🔄 Chat neu laden</button>
+            <button class="action-btn reset-btn" onclick="resetChat()">🗑️ Verlauf leeren</button>
         </div>
     </div>
 
@@ -238,31 +233,34 @@
 
     <script>
         let currentTeam = 'rot';
-        const teamNames = { 'rot': '🔴 Team Rot', 'blau': '🔵 Team Blau', 'gruen': '🟢 Team Grün', 'gelb': '🟡 Team Gelb' };
+        const teamNames = { 'rot': '🔴 Team Rot', 'blau': '🔵 Team Blau', 'gruen': '🟢 Team Grün', 'gelb': '🟡 Team Gelb', 'all': '📢 Globale Funkdurchsage' };
 
         // 1. TEAM AUSWÄHLEN
         function selectTeam(team) {
             currentTeam = team;
             
-            // Buttons zurücksetzen
             document.querySelectorAll('.team-btn').forEach(btn => {
-                btn.className = 'team-btn'; // Alle Klassen entfernen außer Standard
+                btn.className = 'team-btn'; 
             });
             
-            // Aktiven Button markieren
-            document.getElementById('btn-' + team).classList.add('active-' + team);
+            let btnId = team === 'all' ? 'btn-all' : 'btn-' + team;
+            let activeClass = team === 'all' ? 'active-rot' : 'active-' + team;
+            document.getElementById(btnId).classList.add(activeClass);
             
-            // Header und Placeholder anpassen
             document.getElementById('chat-title').innerHTML = `Funkkanal: ${teamNames[team]}`;
-            document.getElementById('chatInput').placeholder = `Nachricht an ${teamNames[team].substring(2)} senden... (Enter)`;
             
-            // Fokus aufs Eingabefeld
+            if(team === 'all') {
+                document.getElementById('chatInput').placeholder = `Nachricht an ALLE TEAMS senden... (Enter)`;
+            } else {
+                document.getElementById('chatInput').placeholder = `Nachricht an ${teamNames[team].substring(2)} senden... (Enter)`;
+            }
+            
             document.getElementById('chatInput').focus();
             
-            loadMessages(true); // True = zwingend ganz nach unten scrollen bei Kanalwechsel
+            // Wenn man das Team wechselt, erzwingen wir auch einen sauberen Refresh der Anzeige
+            forceReloadChat();
         }
 
-        // 2. NACHRICHT SENDEN (Enter-Taste oder Button)
         function handleKey(e) {
             if(e.key === 'Enter') sendMessage();
         }
@@ -276,10 +274,10 @@
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({ 
-                    sender: 'Hendler', 
+                    sender: 'HQ (Admin)', 
                     team: currentTeam, 
                     message: text,
-                    type: 'Handler' 
+                    type: 'admin' 
                 })
             })
             .then(res => {
@@ -287,8 +285,8 @@
                 return res.json();
             })
             .then(() => {
-                input.value = ''; // Textfeld leeren
-                loadMessages(true); // Direkt neu laden
+                input.value = ''; 
+                forceReloadChat(); // Nach dem Senden hart neu laden
             })
             .catch(err => {
                 alert("Verbindung zum Server verloren! Ist er abgestürzt?");
@@ -296,48 +294,64 @@
             });
         }
 
-        // 3. NACHRICHTEN LADEN
-        let lastMessageCount = 0;
+        // 3. NACHRICHTEN LADEN (Versioniert)
+        let lastMessageCount = -1; // -1 erzwingt direkt einen ersten Aufbau
+        let currentChatVersion = 0;
 
         function loadMessages(forceScroll = false) {
-            // Timestamp verhindert Caching im Browser
-            fetch('/api/chat?t=' + new Date().getTime())
+            fetch('/api/chat?v=' + currentChatVersion)
                 .then(res => res.json())
-                .then(allMsgs => {
+                .then(response => {
+                    if (response.unchanged) return; 
+
+                    currentChatVersion = response.version;
+                    const allMsgs = response.messages;
+                    
                     const msgDiv = document.getElementById('messages');
                     
-                    // Filtern: Nur Nachrichten des aktuellen Teams oder "An Alle"
-                    const teamMsgs = allMsgs.filter(m => m.team === currentTeam || m.team === 'all');
+                    // Filtern: Nur Nachrichten des aktuellen Teams ODER Nachrichten die von/an "all" gingen
+                    const teamMsgs = allMsgs.filter(m => 
+                        m.team === currentTeam || 
+                        m.team === 'all' || 
+                        currentTeam === 'all' // Wenn Admin im "All" Reiter ist, sieht er alles
+                    );
                     
-                    // Verhindert Flackern: Nur neu zeichnen, wenn sich die Anzahl geändert hat oder wir das Team gewechselt haben
+                    // Wenn sich an der Anzahl nichts geändert hat, brechen wir ab, um Flackern zu vermeiden
                     if (!forceScroll && teamMsgs.length === lastMessageCount) return;
+                    
                     lastMessageCount = teamMsgs.length;
-
-                    msgDiv.innerHTML = ''; // Leeren
+                    msgDiv.innerHTML = ''; 
 
                     teamMsgs.forEach(m => {
-                        const isPlayer = m.type !== 'Handler';
-                        // Berücksichtige den "message" (neu) und "text" (alt) Parameter zur Sicherheit
+                        const isPlayer = m.type !== 'admin';
                         const msgText = m.message || m.text || ''; 
                         
-                        // Container aufbauen (Links = Spieler, Rechts = Admin)
                         const wrapper = document.createElement('div');
-                        wrapper.className = `msg-container ${isPlayer ? 'player player-' + m.team : 'Handler'}`;
+                        wrapper.className = `msg-container ${isPlayer ? 'player player-' + m.team : 'admin'}`;
                         
+                        // Wenn es eine Nachricht an ALLE ist, farblich hervorheben
+                        let bubbleExtraStyle = m.team === 'all' ? 'border: 2px solid #ffcc00;' : '';
+
                         wrapper.innerHTML = `
-                            <div class="msg-sender">${m.sender}</div>
-                            <div class="msg-bubble">${msgText}</div>
+                            <div class="msg-sender">${m.sender} ${m.team === 'all' ? '(An Alle)' : ''}</div>
+                            <div class="msg-bubble" style="${bubbleExtraStyle}">${msgText}</div>
                         `;
                         
                         msgDiv.appendChild(wrapper);
                     });
 
-                    // Nach unten scrollen, wenn neue Nachrichten da sind oder Kanal gewechselt wurde
                     if (forceScroll || msgDiv.scrollTop + msgDiv.clientHeight >= msgDiv.scrollHeight - 100) {
                         msgDiv.scrollTop = msgDiv.scrollHeight;
                     }
                 }).catch(err => console.log("Warte auf Chat-Server..."));
         }
+
+        // NEU: ZWINGT DAS SYSTEM, ALLES NEU VOM SERVER ZU LADEN
+        window.forceReloadChat = function() {
+            currentChatVersion = 0; // Wir sagen dem Server: Wir wissen von nichts, schick uns ALLES!
+            lastMessageCount = -1;  // Wir zwingen das DOM sich komplett neu zu zeichnen
+            loadMessages(true);
+        };
 
         // 4. CHAT RESETTEN
         window.resetChat = function() {
@@ -350,8 +364,7 @@
                     .then(data => {
                         if(data.success) {
                             alert("✅ Der Chat-Verlauf wurde komplett geleert!");
-                            lastMessageCount = 0;
-                            document.getElementById('messages').innerHTML = '';
+                            forceReloadChat(); // Danach direkt Fenster aktualisieren
                         }
                     })
                     .catch(err => alert("❌ Fehler beim Löschen des Chats:\n" + err.message));
@@ -362,7 +375,7 @@
         setInterval(() => loadMessages(false), 2000); 
         
         // Initialer Ladevorgang
-        loadMessages(true);
+        forceReloadChat();
     </script>
 </body>
 </html>

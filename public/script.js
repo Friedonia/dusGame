@@ -190,7 +190,6 @@ function generateZonePopupContent(props) {
     let lockState = props.locked ? "<span style='color:#ff4444;'>Gesperrt</span>" : "<span style='color:#33ff33;'>Aktiv</span>";
     let btnText = props.locked ? "🔓 Zone entsperren" : "🔒 Zone sperren";
     
-    // 🛒 NEU: Roter Löschen-Button für Items
     let itemStatus = "<span style='color:#888;'>Keine</span>";
     if (props.trap) {
         itemStatus = `<span style='color:#ff8800; font-weight:bold;'>🪤 Falle (Team ${props.trap.toUpperCase()})</span> 
@@ -209,21 +208,19 @@ function generateZonePopupContent(props) {
             <button onclick="toggleZoneLock('${zCode}')" style="background:#444; color:white; border:1px solid #666; padding:6px; font-size:12px; cursor:pointer; border-radius:4px; width:100%; font-weight:bold;">${btnText}</button>`;
 }
 
-// Funktion zum Löschen von Buffs/Fallen auf einer einzelnen Zone
 window.removeZoneItem = function(code) {
     drawnItems.eachLayer(function(layer) {
         if (layer.feature && layer.feature.properties && layer.feature.properties.code === code) {
             delete layer.feature.properties.buff;
             delete layer.feature.properties.trap;
-            saveZones(); // Speichert die Karte auf dem Server
+            saveZones(); 
             if (layer.getPopup()) {
-                layer.setPopupContent(generateZonePopupContent(layer.feature.properties)); // Aktualisiert das Popup
+                layer.setPopupContent(generateZonePopupContent(layer.feature.properties)); 
             }
         }
     });
 };
 
-// Funktion um ALLE Items auf der ganzen Karte zu löschen (z.B. für einen Button)
 window.resetAllItems = function() {
     if(confirm("⚠️ Sollen ALLE Buffs und Fallen auf der gesamten Karte gelöscht werden?")) {
         let changed = false;
@@ -412,12 +409,26 @@ map.on('popupopen', () => isPopupOpen = true);
 map.on('popupclose', () => isPopupOpen = false);
 
 // ==========================================
-// 🔄 AUTOMATISCHE AKTUALISIERUNG (10 SEK)
+// 🔄 AUTOMATISCHE AKTUALISIERUNG (EFFIZIENTES POLLING)
 // ==========================================
+let currentMapVersion = 0; // Speichert den Versions-Stand!
+
 function loadZonesFromServer() {
     if (isEditingMap || isPopupOpen) return;
 
-    fetch('/api/zones?t=' + new Date().getTime()).then(res => res.json()).then(data => {
+    // Schickt die aktuelle Version ans Backend
+    fetch('/api/zones?v=' + currentMapVersion)
+    .then(res => res.json())
+    .then(response => {
+        // SERVER SAGT: NICHTS NEUES! Wir sparen extrem viel Traffic und brechen ab.
+        if (response.unchanged) {
+            return;
+        }
+
+        // SERVER SAGT: NEUE DATEN!
+        currentMapVersion = response.version;
+        let data = response.data;
+
         if (data.gameSettings) {
             let radarToggle = document.getElementById('global-radar-toggle');
             if (radarToggle) radarToggle.checked = data.gameSettings.showPlayers === true;
@@ -443,7 +454,6 @@ function loadZonesFromServer() {
                 if (document.getElementById('cd-gelb') && document.activeElement !== document.getElementById('cd-gelb')) document.getElementById('cd-gelb').value = data.gameSettings.teamCooldowns.gelb || 0;
             }
 
-            // Reset-Signal auslesen
             if (data.gameSettings.cooldownResetTime) window.globalCooldownResetTime = data.gameSettings.cooldownResetTime;
 
             gameEndTime = data.gameSettings.endTime || null;
@@ -481,6 +491,7 @@ function loadZonesFromServer() {
     }).catch(err => console.log("Live-Update fehlgeschlagen:", err));
 }
 
+// 10 Sekunden Interval reicht völlig aus für das Admin-Panel
 setInterval(loadZonesFromServer, 10000); 
 loadZonesFromServer();
 
@@ -504,7 +515,7 @@ function updateLiveLocations() {
 setInterval(updateLiveLocations, 5000);
 
 // ==========================================
-// ⏳ LIVE SPIELER-COOLDOWNS IM ADMIN-PANEL (Mit Accordion-Menü)
+// ⏳ LIVE SPIELER-COOLDOWNS IM ADMIN-PANEL 
 // ==========================================
 window.adminAccordionState = window.adminAccordionState || { rot: false, blau: false, gruen: false, gelb: false };
 
@@ -568,7 +579,7 @@ function updateAdminCooldowns() {
                 htmlStr += `</div></div>`;
             }
             container.innerHTML = htmlStr;
-        }).catch(err => console.log("Live-Cooldown Update Fehler (Admin-Panel):", err));
+        }).catch(err => console.log("Live-Cooldown Update Fehler:", err));
 }
 
 if (!window.adminCooldownInterval) {
@@ -585,6 +596,7 @@ function saveZones() {
     let toggleRadar = document.getElementById('global-radar-toggle');
     let toggleFreeze = document.getElementById('global-freeze-toggle');
     let toggleShop = document.getElementById('global-shop-toggle');
+    let toggleGps = document.getElementById('global-gps-toggle'); // NEU
     let payoutVal = document.getElementById('payout-interval-input');
     
     let cdRot = document.getElementById('cd-rot');
@@ -596,6 +608,7 @@ function saveZones() {
         showPlayers: toggleRadar ? toggleRadar.checked : false,
         gamePaused: toggleFreeze ? toggleFreeze.checked : false,
         shopEnabled: toggleShop ? toggleShop.checked : true,
+        gpsRequired: toggleGps ? toggleGps.checked : true, // NEU: Standard ist "An"
         endTime: gameEndTime,
         announcement: gameAnnouncement,
         teamCooldowns: {
@@ -612,7 +625,85 @@ function saveZones() {
     .then(res => res.json()).then(data => console.log("Auto-Save erfolgreich!")).catch(err => err);
 }
 
-// 🔄 SICHERER RESET-BEFEHL (Fängt Fehler ab!)
+// (In der loadZonesFromServer Funktion diesen Teil ergänzen):
+function loadZonesFromServer() {
+    if (isEditingMap || isPopupOpen) return;
+
+    fetch('/api/zones?v=' + currentMapVersion)
+    .then(res => res.json())
+    .then(response => {
+        if (response.unchanged) return;
+
+        currentMapVersion = response.version;
+        let data = response.data;
+
+        if (data.gameSettings) {
+            let radarToggle = document.getElementById('global-radar-toggle');
+            if (radarToggle) radarToggle.checked = data.gameSettings.showPlayers === true;
+            
+            let freezeToggle = document.getElementById('global-freeze-toggle');
+            if (freezeToggle) freezeToggle.checked = data.gameSettings.gamePaused === true;
+
+            let shopToggle = document.getElementById('global-shop-toggle');
+            if (shopToggle && data.gameSettings.shopEnabled !== undefined) {
+                shopToggle.checked = data.gameSettings.shopEnabled;
+            }
+
+            // NEU: Lade den GPS Schalter Status
+            let gpsToggle = document.getElementById('global-gps-toggle');
+            if (gpsToggle && data.gameSettings.gpsRequired !== undefined) {
+                gpsToggle.checked = data.gameSettings.gpsRequired;
+            }
+
+            let payoutInput = document.getElementById('payout-interval-input');
+            if (payoutInput && data.gameSettings.payoutInterval !== undefined && document.activeElement !== payoutInput) {
+                payoutInput.value = data.gameSettings.payoutInterval;
+            }
+
+            if (data.gameSettings.teamCooldowns) {
+                if (document.getElementById('cd-rot') && document.activeElement !== document.getElementById('cd-rot')) document.getElementById('cd-rot').value = data.gameSettings.teamCooldowns.rot || 0;
+                if (document.getElementById('cd-blau') && document.activeElement !== document.getElementById('cd-blau')) document.getElementById('cd-blau').value = data.gameSettings.teamCooldowns.blau || 0;
+                if (document.getElementById('cd-gruen') && document.activeElement !== document.getElementById('cd-gruen')) document.getElementById('cd-gruen').value = data.gameSettings.teamCooldowns.gruen || 0;
+                if (document.getElementById('cd-gelb') && document.activeElement !== document.getElementById('cd-gelb')) document.getElementById('cd-gelb').value = data.gameSettings.teamCooldowns.gelb || 0;
+            }
+
+            if (data.gameSettings.cooldownResetTime) window.globalCooldownResetTime = data.gameSettings.cooldownResetTime;
+            gameEndTime = data.gameSettings.endTime || null;
+            gameAnnouncement = data.gameSettings.announcement || null;
+        }
+        
+        drawnItems.clearLayers();
+        let needsSave = false;
+        
+        if (data.features && data.features.length > 0) {
+            L.geoJSON(data, {
+                pointToLayer: function (feature, latlng) {
+                    if (feature.properties.type === "nfc-tag") return L.marker(latlng, { icon: getNfcIcon(feature.properties.visibleToPlayers) });
+                    return L.marker(latlng);
+                },
+                style: function (feature) {
+                    if (feature.properties.type === "transit-line") return { color: feature.properties.color, weight: 4 };
+                },
+                onEachFeature: function (feature, layer) {
+                    if (feature.properties.type === "zone") {
+                        if (!feature.properties.code || !feature.properties.code.includes('#')) { feature.properties.code = generateSpecialCode(); needsSave = true; }
+                        applyZoneStyle(layer); 
+                        makeEditable(layer);
+                    } else if (feature.properties.type === "nfc-tag") {
+                        bindNfcPopup(layer);
+                    }
+                    drawnItems.addLayer(layer);
+                }
+            });
+            updateStatistics();
+            applyAllLegendFilters(); 
+            
+            if (needsSave) setTimeout(saveZones, 1000);
+        }
+    }).catch(err => console.log("Live-Update fehlgeschlagen:", err));
+}
+
+// 🔄 SICHERER RESET-BEFEHL
 window.resetAllCooldowns = function() {
     if(confirm("⚠️ Sollen die aktiven Cooldown-Sperren ALLER Spieler auf der Straße JETZT sofort beendet werden?")) {
         fetch('/api/reset-cooldowns', { method: 'POST' })
@@ -621,7 +712,7 @@ window.resetAllCooldowns = function() {
                 if (contentType && contentType.includes("application/json")) {
                     return res.json();
                 } else {
-                    throw new Error("Die Server-Route '/api/reset-cooldowns' existiert nicht oder ist fehlerhaft! Hast du die server.js aktualisiert?");
+                    throw new Error("Fehler beim Erreichen der Reset-Route.");
                 }
             })
             .then(data => {
@@ -673,8 +764,7 @@ window.manageCoins = function(action) {
         if (contentType && contentType.includes("application/json")) {
             return res.json();
         } else {
-            const text = await res.text();
-            throw new Error("Server hat nicht richtig geantwortet. Hast du den Server im Terminal neu gestartet?");
+            throw new Error("Server hat nicht richtig geantwortet.");
         }
     })
     .then(data => {
