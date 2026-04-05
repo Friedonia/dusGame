@@ -1,0 +1,17 @@
+{
+  "name": "dusGame",
+  "short_name": "dusGame",
+  "description": "Urban Tactical NFC Game",
+  "start_url": "/player.html",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#ff3333",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

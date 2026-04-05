@@ -4,6 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Spieler HUD</title>
+    <link rel="manifest" href="/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+<script>
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(err => console.log("SW Error", err));
+    }
+</script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         :root {
@@ -144,6 +153,7 @@
                         <button onclick="submitManualCode()">Senden</button>
                     </div>
                 </div>
+                <button onclick="openShopModal()" style="background:#444; color:#fff; border:1px solid #666; padding:10px; border-radius:5px; margin-top:10px; width:100%;">🎒 SHOP & RUCKSACK</button>
             </div>
         </div>
 

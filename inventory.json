@@ -1,0 +1,23 @@
+{
+  "gruen_1": {
+    "trap": 0,
+    "buff": 0,
+    "revive": 0,
+    "pickpocket": 1,
+    "defuse": 0,
+    "emp": 0
+  },
+  "blau_2": {
+    "trap": 2,
+    "buff": 2,
+    "revive": 0,
+    "taschendieb": 0
+  },
+  "blau_1": {
+    "trap": 0,
+    "buff": 1,
+    "revive": 0,
+    "pickpocket": null,
+    "defuse": null
+  }
+}

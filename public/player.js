@@ -439,7 +439,93 @@ function fetchPlayers() {
 // LÄDT DIE KARTE ALLE 3 SEKUNDEN (Mit Version-Check fast ohne Traffic!)
 setInterval(updateMap, 3000); 
 updateMap();
+// ==========================================
+// 🎒 RUCKSACK & SHOP MODAL
+// ==========================================
+window.openShopModal = function() {
+    let modal = document.getElementById('shop-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'shop-modal';
+        modal.style.cssText = `position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:9999; display:flex; justify-content:center; align-items:center; flex-direction:column; color:white; font-family:monospace;`;
+        document.body.appendChild(modal);
+    }
+    
+    modal.style.display = 'flex';
+    modal.innerHTML = `<h2>Lade Rucksack... ⏳</h2>`;
 
+    Promise.all([
+        fetch(`/api/inventory?team=${myTeam}&player=${myPlayerNum}`).then(res => res.json()),
+        fetch('/api/coins').then(res => res.json())
+    ]).then(([inv, wallets]) => {
+        let teamCoins = wallets[myTeam] || 0;
+        
+        // Helfer-Funktion für das Zeichnen der Shop-Reihen
+        const drawItem = (id, name, desc, price, color, count) => `
+            <div style="display:flex; justify-content:space-between; background:#222; padding:8px; margin-bottom:8px; border-radius:5px; border-left:3px solid ${color};">
+                <div>
+                    <strong style="font-size:14px;">${name}</strong><br>
+                    <span style="font-size:11px; color:#aaa;">${desc}<br>Im Rucksack: <span style="color:${color}; font-weight:bold;">${count || 0}x</span></span>
+                </div>
+                <button onclick="buyItemGlobal('${id}')" style="background:${color}; color:${id==='buff'?'black':'white'}; border:none; padding:8px; border-radius:5px; cursor:pointer; font-weight:bold;">${price}💰</button>
+            </div>
+        `;
+
+        modal.innerHTML = `
+            <div style="background:#111; padding:15px; border:2px solid ${teamColors[myTeam]}; border-radius:10px; width:95%; max-width:400px; max-height:85vh; overflow-y:auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                    <h2 style="margin:0; font-size:18px;">🛒 BLACK MARKET</h2>
+                    <button onclick="document.getElementById('shop-modal').style.display='none'" style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px; font-weight:bold;">X</button>
+                </div>
+                
+                <div style="background:#222; padding:10px; border-radius:5px; margin-bottom:15px; text-align:center;">
+                    <span style="color:#aaa;">Team-Kasse:</span> <strong style="color:#ffcc00; font-size:20px;">${teamCoins} 💰</strong>
+                </div>
+
+                <h3 style="color:#aaa; border-bottom:1px solid #444; padding-bottom:5px; font-size:14px;">Taktische Items:</h3>
+                
+                ${drawItem('trap', '🪤 Falle (Lokal)', 'Bestraft Scanner (+1 Min).', 30, '#ff8800', inv.trap)}
+                ${drawItem('buff', '⚡ Buff (Lokal)', 'Belohnt dein Team (-1 Min).', 30, '#00ffcc', inv.buff)}
+                ${drawItem('drohne', '🚁 Drohne (Lokal)', 'Zählt Fallen auf fremder Zone.', 10, '#0088ff', inv.drohne)}
+                ${drawItem('entschaerfung', '✂️ Entschärfer (Lokal)', 'Löscht alle Fallen der Zone.', 40, '#ff00ff', inv.entschaerfung)}
+                ${drawItem('taschendieb', '🕵️‍♂️ Dieb (Lokal)', 'Klaut 15 Coins an Feindes-Zone.', 30, '#8a2be2', inv.taschendieb)}
+                ${drawItem('emp', '⚡ EMP-Granate (Lokal)', 'Sperrt Zone für 15 Minuten.', 80, '#ff3333', inv.emp)}
+                ${drawItem('revive', '🚑 Revive (Global)', 'Löscht Team-Cooldown.', 200, '#ff4444', inv.revive)}
+
+                ${inv.revive > 0 ? `<button onclick="useItemGlobal('revive')" style="width:100%; padding:15px; background:#aa0000; color:white; font-weight:bold; font-size:16px; border:none; border-radius:8px; margin-top:10px; cursor:pointer; text-transform:uppercase; animation: pulse 2s infinite;">🚨 Revive zünden! (${inv.revive})</button>` : ''}
+            </div>
+        `;
+    });
+};
+window.buyItemGlobal = function(type) {
+    fetch('/api/shop/buy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ team: myTeam, player: myPlayerNum, itemType: type })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) alert("❌ " + data.error);
+        else openShopModal(); // Fenster einfach neu laden für aktuelle Zahlen
+    });
+};
+
+window.useItemGlobal = function(type) {
+    if(!confirm("Bist du sicher? Das Item wird sofort ausgelöst!")) return;
+    fetch('/api/shop/use', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ team: myTeam, player: myPlayerNum, itemType: type })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) alert("❌ " + data.error);
+        else {
+            alert("✅ " + data.message);
+            openShopModal(); // Zahlen updaten
+        }
+    });
+};
 // ==========================================
 // 📍 GPS LOGIK 
 // ==========================================

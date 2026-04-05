@@ -5,35 +5,68 @@ const path = require('path');
 
 const app = express();
 const PORT = 3000;
+
+// ==========================================
+// 🗄️ DATEI-PFADE
+// ==========================================
 const ZONES_FILE = path.join(__dirname, 'zones.json');
-const TRAILS_FILE = path.join(__dirname, 'trails.json'); // NEU: Datei für die Spuren
+const TRAILS_FILE = path.join(__dirname, 'trails.json'); 
+const INVENTORY_FILE = path.join(__dirname, 'inventory.json'); // Das neue Rucksack-System
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static('public')); 
 
 // ==========================================
-// 🗺️ KARTEN-DATENBANK (RAM-Trick & Versionierung)
+// 🧮 GLOBALE HILFS-FUNKTIONEN (GPS Mathe)
+// ==========================================
+function getDistanceInMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371e3; // Erdradius in Metern
+    const p1 = lat1 * Math.PI / 180;
+    const p2 = lat2 * Math.PI / 180;
+    const dp = (lat2 - lat1) * Math.PI / 180;
+    const dl = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(dp / 2) * Math.sin(dp / 2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; 
+}
+
+function getPolygonCenter(coordinates) {
+    let latSum = 0, lngSum = 0, count = 0;
+    let coords = coordinates[0]; 
+    if(!Array.isArray(coords[0])) coords = coordinates; // Fallback
+
+    for (let i = 0; i < coords.length; i++) {
+        lngSum += coords[i][0]; 
+        latSum += coords[i][1];
+        count++;
+    }
+    return { lat: latSum / count, lng: lngSum / count };
+}
+
+const MAX_INTERACT_DISTANCE = 60; // Max Entfernung für Zonen-Hacks
+
+// ==========================================
+// 🗺️ KARTEN-DATENBANK (RAM-Trick)
 // ==========================================
 let gameSettings = {}; 
 let globalMapData = { type: "FeatureCollection", features: [] };
 let mapNeedsSaving = false;
-let mapVersion = Date.now(); // Der aktuelle Versions-Stempel!
+let mapVersion = Date.now();
 
-// Beim Server-Start: Festplatte EINMAL auslesen
+// Laden der Karte
 if (fs.existsSync(ZONES_FILE)) {
     try {
         globalMapData = JSON.parse(fs.readFileSync(ZONES_FILE));
-        if (globalMapData.gameSettings) {
-            gameSettings = globalMapData.gameSettings; 
-        }
+        if (globalMapData.gameSettings) gameSettings = globalMapData.gameSettings; 
         console.log("✅ Zonen-Karte erfolgreich in den RAM geladen!");
     } catch (e) {
         console.error("❌ Fehler beim Laden der zones.json:", e);
     }
 }
 
-// Hintergrund-Job: Speichert die Karte alle 5 Sekunden (nur wenn sich was geändert hat)
+// Karte speichern (alle 5 Sekunden prüfen)
 setInterval(() => {
     if (mapNeedsSaving) {
         fs.writeFile(ZONES_FILE, JSON.stringify(globalMapData, null, 2), (err) => {
@@ -43,61 +76,95 @@ setInterval(() => {
     }
 }, 5000);
 
+// ==========================================
+// 🎒 PERSÖNLICHES INVENTAR (RUCKSACK)
+// ==========================================
+let playerInventory = {};
+let invNeedsSaving = false;
+
+// Format: { "rot_1": { trap: 2, buff: 1 }, "blau_2": { trap: 0, buff: 3 } }
+
+if (fs.existsSync(INVENTORY_FILE)) {
+    try {
+        playerInventory = JSON.parse(fs.readFileSync(INVENTORY_FILE));
+        console.log("✅ Rucksäcke erfolgreich geladen!");
+    } catch (e) {
+        console.error("❌ Fehler beim Laden der inventory.json:", e);
+    }
+}
+
+setInterval(() => {
+    if (invNeedsSaving) {
+        fs.writeFile(INVENTORY_FILE, JSON.stringify(playerInventory, null, 2), (err) => {
+            if (err) console.error("❌ Fehler beim Speichern der Rucksäcke:", err);
+            else invNeedsSaving = false;
+        });
+    }
+}, 8000);
 
 // ==========================================
-// 💰 WIRTSCHAFT & SHOP SYSTEM (Dynamisch)
+// 💰 WIRTSCHAFT & AUTO-PAYOUT
 // ==========================================
 let teamWallets = { rot: 0, blau: 0, gruen: 0, gelb: 0 };
 const TEAM_COLORS = { '#ff3333': 'rot', '#3366ff': 'blau', '#33ff33': 'gruen', '#ffcc00': 'gelb' };
 
 let payoutTimer = null;
-let currentPayoutMins = 45; // Standardwert
+let currentPayoutMins = 45; 
 
 function distributeCoins() {
-    // Liest jetzt sicher und extrem schnell aus dem RAM (globalMapData)
     if (globalMapData.gameSettings && globalMapData.gameSettings.shopEnabled === false) return; 
 
     let newCoins = { rot: 0, blau: 0, gruen: 0, gelb: 0 };
+    let didPayout = false;
     
     if (globalMapData.features) {
         globalMapData.features.forEach(f => {
             let zColor = f.properties.color ? f.properties.color.toLowerCase() : "";
-            
             if (f.properties.type === "zone" && TEAM_COLORS[zColor]) {
                 let team = TEAM_COLORS[zColor];
                 let level = f.properties.level || 1;
+                
                 if (level === 1) newCoins[team] += 5;
                 if (level === 2) newCoins[team] += 10;
                 if (level === 3) newCoins[team] += 15;
+                didPayout = true;
             }
         });
     }
-
-    for (let t in newCoins) teamWallets[t] += newCoins[t];
-    console.log(`💰 Auto-Payout (${currentPayoutMins}min)! Neue Coins:`, newCoins, "| Kontostand:", teamWallets);
+    
+    if (didPayout) {
+        for (let t in newCoins) teamWallets[t] += newCoins[t];
+        console.log(`💰 Auto-Payout (${currentPayoutMins}min)! Neue Coins:`, newCoins, "| Kontostand:", teamWallets);
+    }
 }
 
-// Funktion zum (Neu-)Starten des Timers
 function startPayoutLoop(mins) {
     if (payoutTimer) clearInterval(payoutTimer);
-    currentPayoutMins = mins > 0 ? mins : 45; // Fallback auf 45
+    currentPayoutMins = mins > 0 ? mins : 45; 
     payoutTimer = setInterval(distributeCoins, currentPayoutMins * 60 * 1000);
     console.log(`⏱️ Payout-Intervall auf ${currentPayoutMins} Minuten gesetzt.`);
 }
 
-// Timer beim Start einstellen
-if (gameSettings.payoutInterval) {
-    currentPayoutMins = parseInt(gameSettings.payoutInterval);
-}
-distributeCoins(); // Erste Ausschüttung beim Start
-startPayoutLoop(currentPayoutMins);
+// Dynamische Payout-Überwachung
+setInterval(() => {
+    if (!globalMapData.gameSettings) return;
+    let adminSetMins = parseInt(globalMapData.gameSettings.payoutInterval) || 45;
+    if (adminSetMins !== currentPayoutMins) {
+        startPayoutLoop(adminSetMins);
+    }
+}, 5000);
 
-// API: Kontostände abrufen
-app.get('/api/coins', (req, res) => {
-    res.json(teamWallets);
+// Initialer Start (Verzögert)
+setTimeout(() => {
+    let initialMins = (globalMapData.gameSettings && globalMapData.gameSettings.payoutInterval) ? parseInt(globalMapData.gameSettings.payoutInterval) : 45;
+    distributeCoins();
+    startPayoutLoop(initialMins);
+}, 2000); 
+
+app.get('/api/coins', (req, res) => { 
+    res.json(teamWallets); 
 });
 
-// 🔄 API für die Manuelle Bank-Verwaltung (Admin)
 app.post('/api/coins/manage', (req, res) => {
     const { team, amount, action } = req.body;
     let val = parseInt(amount) || 0;
@@ -120,29 +187,214 @@ app.post('/api/coins/manage', (req, res) => {
 });
 
 // ==========================================
-// 🗺️ ZONEN & SHOP KÄUFE (Versioniert!)
+// 🛒 SHOP & INVENTAR SYSTEM
 // ==========================================
 
-// Handys fragen hier an
+// 🚀 NEU: Die Heil-Funktion! Sie repariert NaN-Fehler und fügt neue Items sicher hinzu.
+function getSafeInventory(invKey) {
+    if (!playerInventory[invKey]) {
+        playerInventory[invKey] = { trap: 0, buff: 0, revive: 0, emp: 0, defuse: 0, pickpocket: 0 };
+    }
+    const allItems = ['trap', 'buff', 'revive', 'emp', 'defuse', 'pickpocket'];
+    allItems.forEach(item => {
+        // Wenn das Item fehlt oder "NaN" ist, setzen wir es auf 0 zurück!
+        if (typeof playerInventory[invKey][item] !== 'number' || isNaN(playerInventory[invKey][item])) {
+            playerInventory[invKey][item] = 0;
+        }
+    });
+    return playerInventory[invKey];
+}
+
+// 1. Rucksack abrufen
+app.get('/api/inventory', (req, res) => {
+    const { team, player } = req.query;
+    const invKey = `${team}_${player}`;
+    if (!playerInventory[invKey]) {
+        // NEU: entschaerfung, drohne, emp hinzugefügt (Schild ist raus)
+        playerInventory[invKey] = { trap: 0, buff: 0, revive: 0, taschendieb: 0, entschaerfung: 0, drohne: 0, emp: 0 };
+    }
+    res.json(playerInventory[invKey]);
+});
+
+// 2. KAUFEN
+app.post('/api/shop/buy', (req, res) => {
+    const { team, player, itemType } = req.body;
+    
+    // NEU: Preise für die neuen Items
+    const PRICES = { 
+        'trap': 30, 'buff': 30, 'revive': 200, 'taschendieb': 30,
+        'entschaerfung': 40, 'drohne': 10, 'emp': 80
+    };
+    const price = PRICES[itemType];
+    
+    if (!price) return res.status(400).json({ error: "Unbekanntes Item!" });
+    if (teamWallets[team] < price) return res.status(400).json({ error: "Das Team hat nicht genug Coins!" });
+
+    teamWallets[team] -= price;
+    
+    const invKey = `${team}_${player}`;
+    if (!playerInventory[invKey]) playerInventory[invKey] = {};
+    if (playerInventory[invKey][itemType] === undefined) playerInventory[invKey][itemType] = 0;
+    
+    playerInventory[invKey][itemType] += 1;
+    invNeedsSaving = true;
+
+    res.json({ success: true, newBalance: teamWallets[team], inventory: playerInventory[invKey] });
+});
+
+// 3. BENUTZEN
+app.post('/api/shop/use', (req, res) => {
+    const { team, player, itemType, zoneCode } = req.body;
+    const invKey = `${team}_${player}`;
+
+    if (!playerInventory[invKey] || playerInventory[invKey][itemType] <= 0) {
+        return res.status(400).json({ error: "Du hast dieses Item nicht im Rucksack!" });
+    }
+
+    // === GLOBALES ITEM: TEAM-REVIVE ===
+    if (itemType === 'revive') {
+        playerInventory[invKey][itemType] -= 1; 
+        invNeedsSaving = true;
+        if (globalMapData.gameSettings && globalMapData.gameSettings.teamCooldowns) {
+            globalMapData.gameSettings.teamCooldowns[team] = 0;
+            if(typeof gameSettings !== 'undefined') gameSettings.teamCooldowns[team] = 0;
+        }
+        mapVersion = Date.now(); mapNeedsSaving = true;
+        return res.json({ success: true, message: "🚨 Team erfolgreich wiederbelebt!" });
+    }
+
+    if (!zoneCode) return res.status(400).json({ error: "Für dieses Item musst du an einer Zone sein!" });
+    let zone = globalMapData.features.find(f => f.properties && f.properties.code === zoneCode);
+    if (!zone) return res.status(404).json({ error: "Zone nicht gefunden!" });
+
+    // NEU: EMP Check, falls die Zone blockiert ist
+    if (zone.properties.empUntil && zone.properties.empUntil > Date.now()) {
+        return res.status(403).json({ error: "Zone ist durch EMP gestört! Items unwirksam." });
+    }
+
+    // Item verbrauchen
+    playerInventory[invKey][itemType] -= 1; 
+    invNeedsSaving = true;
+
+    // === TASCHENDIEB ===
+    if (itemType === 'taschendieb') {
+        let zColor = zone.properties.color ? zone.properties.color.toLowerCase() : "";
+        let enemyTeam = TEAM_COLORS[zColor];
+        if (!enemyTeam || enemyTeam === team) return res.status(400).json({ error: "Zone gehört keinem Feind!" });
+
+        let stealAmount = 15; 
+        if (teamWallets[enemyTeam] < stealAmount) stealAmount = teamWallets[enemyTeam]; 
+        teamWallets[enemyTeam] -= stealAmount;
+        teamWallets[team] += stealAmount;
+        return res.json({ success: true, message: `🕵️‍♂️ ${stealAmount} Coins von Team ${enemyTeam.toUpperCase()} gestohlen!` });
+    }
+
+    // === ENTSCHÄRFUNG ===
+    if (itemType === 'entschaerfung') {
+        delete zone.properties.traps;
+        mapVersion = Date.now(); mapNeedsSaving = true;
+        return res.json({ success: true, message: "✂️ Alle Fallen in dieser Zone sicher entschärft!" });
+    }
+
+    // === DROHNE ===
+    if (itemType === 'drohne') {
+        let trapCount = 0;
+        if (zone.properties.traps) trapCount = zone.properties.traps.filter(t => t !== team).length;
+        return res.json({ success: true, message: `🚁 Drohne meldet: ${trapCount} feindliche Falle(n) in dieser Zone entdeckt!` });
+    }
+
+    // === EMP GRANATE ===
+    if (itemType === 'emp') {
+        zone.properties.empUntil = Date.now() + (15 * 60 * 1000); // 15 Minuten Sperre
+        mapVersion = Date.now(); mapNeedsSaving = true;
+        return res.json({ success: true, message: "⚡ EMP gezündet! Zone für 5 Minuten komplett lahmgelegt." });
+    }
+
+    // === FALLEN & BUFFS ===
+    if (!zone.properties.traps) zone.properties.traps = [];
+    if (!zone.properties.buffs) zone.properties.buffs = [];
+
+    if (itemType === 'trap') {
+        if (zone.properties.traps.length >= 5) return res.status(400).json({ error: "Maximal 5 Fallen in dieser Zone!" });
+        zone.properties.traps.push(team);
+    } else if (itemType === 'buff') {
+        if (zone.properties.buffs.length >= 5) return res.status(400).json({ error: "Maximal 5 Buffs in dieser Zone!" });
+        zone.properties.buffs.push(team);
+    }
+
+    mapVersion = Date.now(); mapNeedsSaving = true;
+    res.json({ success: true, message: `${itemType} erfolgreich platziert!` });
+});
+
+// 4. ADMIN: Inventar von Spielern verwalten
+app.post('/api/inventory/manage', (req, res) => {
+    const { team, player, itemType, amount, action } = req.body;
+    if (!team || !player || !itemType) return res.status(400).json({ error: "Fehlende Daten" });
+
+    let inv = getSafeInventory(`${team}_${player}`);
+    let val = parseInt(amount) || 1;
+
+    if (action === 'add') inv[itemType] += val;
+    else if (action === 'sub') {
+        inv[itemType] -= val;
+        if (inv[itemType] < 0) inv[itemType] = 0;
+    } else if (action === 'set') {
+        inv[itemType] = val;
+    }
+
+    invNeedsSaving = true;
+    res.json({ success: true, inventory: inv, message: `Inventar von ${team} Spieler ${player} aktualisiert!` });
+});
+
+// 5. ADMIN: Alle Inventare komplett leeren
+app.post('/api/inventory/reset-all', (req, res) => {
+    playerInventory = {}; 
+    invNeedsSaving = true; 
+    fs.writeFileSync(INVENTORY_FILE, JSON.stringify({}));
+    res.json({ success: true, message: "Alle Rucksäcke wurden erfolgreich geleert!" });
+});
+
+// COOLDOWN FREIKAUFEN (-2 Min)
+app.post('/api/reduce-cooldown', (req, res) => {
+    const { team, player } = req.body;
+    const REDUCE_PRICE = 50; 
+    
+    if (teamWallets[team] < REDUCE_PRICE) return res.status(400).json({ error: "Nicht genug Münzen zum Freikaufen!" });
+
+    teamWallets[team] -= REDUCE_PRICE;
+    
+    if (!globalMapData.gameSettings) globalMapData.gameSettings = {};
+    if (!globalMapData.gameSettings.teamCooldowns) globalMapData.gameSettings.teamCooldowns = {rot:5, blau:5, gruen:5, gelb:5};
+    
+    let currentCD = parseInt(globalMapData.gameSettings.teamCooldowns[team]) || 0;
+    currentCD -= 2; 
+    if (currentCD < 0) currentCD = 0;
+    
+    globalMapData.gameSettings.teamCooldowns[team] = currentCD;
+    gameSettings.teamCooldowns[team] = currentCD;
+
+    mapVersion = Date.now();
+    mapNeedsSaving = true;
+    
+    console.log(`[SHOP] Team ${team} hat sich freigekauft. Neuer Cooldown: ${currentCD} Min.`);
+    res.json({ success: true, newBalance: teamWallets[team] });
+});
+
+
+// ==========================================
+// 🗺️ ZONEN VERWALTUNG (MAP SYNC)
+// ==========================================
 app.get('/api/zones', (req, res) => {
     const clientVersion = parseInt(req.query.v) || 0;
-    
-    if (clientVersion === mapVersion) {
-        // Spieler hat die aktuelle Version! Nichts Neues senden.
-        return res.json({ unchanged: true });
-    }
-    
-    // Spieler braucht ein Update
+    if (clientVersion === mapVersion) return res.json({ unchanged: true });
     res.json({ version: mapVersion, data: globalMapData });
 });
 
-// Admin überschreibt die Karte
 app.post('/api/zones', (req, res) => {
     const geoData = req.body;
-    
-    globalMapData = geoData; // RAM aktualisieren
-    mapVersion = Date.now(); // NEUE VERSION!
-    mapNeedsSaving = true;   // Speichern vormerken
+    globalMapData = geoData; 
+    mapVersion = Date.now(); 
+    mapNeedsSaving = true;   
 
     if (geoData.gameSettings) {
         gameSettings = geoData.gameSettings; 
@@ -151,86 +403,144 @@ app.post('/api/zones', (req, res) => {
             if (newMins !== currentPayoutMins) startPayoutLoop(newMins);
         }
     }
-
     res.json({ message: 'Zonen & Einstellungen erfolgreich aktualisiert!' });
 });
 
-// Spieler kauft ein Item
-// 1. Shop-Logik für Stacking (Mehrere Fallen/Buffs)
-app.post('/api/shop', (req, res) => {
-    const { team, zoneCode, itemType } = req.body;
-    const PRICE = 30; // Preis pro Item
+// ==========================================
+// ⚡ SUPER-SCHNELLE SCANNER-ROUTEN
+// ==========================================
+app.get('/api/zone/:code', (req, res) => {
+    const { team, player } = req.query; // Neu: Wir fragen Team & Spieler ab
+    if (!globalMapData.features) return res.status(404).json({ error: "Keine Zonen gefunden" });
+    const zone = globalMapData.features.find(f => f.properties && f.properties.code === req.params.code);
+    if (!zone) return res.status(404).json({ error: "Zone nicht gefunden" });
     
-    if (teamWallets[team] < PRICE) return res.status(400).json({ error: "Nicht genug Coins!" });
+    // Inventar des Spielers direkt mitschicken
+    const invKey = `${team}_${player}`;
+    let inv = playerInventory[invKey] || { trap: 0, buff: 0, revive: 0, emp: 0, defuse: 0, pickpocket: 0 };
 
-    let zone = globalMapData.features.find(f => f.properties && f.properties.code === zoneCode);
-    if (!zone) return res.status(404).json({ error: "Zone nicht gefunden!" });
-
-    // Initialisiere Arrays falls sie noch nicht existieren
-    if (!zone.properties.traps) zone.properties.traps = [];
-    if (!zone.properties.buffs) zone.properties.buffs = [];
-
-    teamWallets[team] -= PRICE;
-
-    if (itemType === 'trap') {
-        if (zone.properties.traps.length >= 5) return res.status(400).json({ error: "Maximal 5 Fallen erlaubt!" });
-        zone.properties.traps.push(team);
-    } else if (itemType === 'buff') {
-        if (zone.properties.buffs.length >= 5) return res.status(400).json({ error: "Maximal 5 Buffs erlaubt!" });
-        zone.properties.buffs.push(team);
-    }
-
-    mapVersion = Date.now();
-    mapNeedsSaving = true;
-    res.json({ success: true, newBalance: teamWallets[team], message: `${itemType} platziert!` });
+    res.json({ zone: zone.properties, gameSettings: globalMapData.gameSettings || {}, inventory: inv });
 });
 
-// 2. NEU: Cooldown Freikauf-Route
-app.post('/api/reduce-cooldown', (req, res) => {
-    const { team, player } = req.body;
-    const REDUCE_PRICE = 35; // Kosten für -1 Minute Cooldown
+app.post('/api/zone-action', (req, res) => {
+    const { code, action, newColor, playerLat, playerLng, team, player, cooldownChange } = req.body;
+    let zone = globalMapData.features.find(f => f.properties && f.properties.code === code);
     
-    if (teamWallets[team] < REDUCE_PRICE) return res.status(400).json({ error: "Nicht genug Münzen zum Freikaufen!" });
-
-    if (playerStates[team] && playerStates[team][player]) {
-        teamWallets[team] -= REDUCE_PRICE;
-        // Wir ziehen 1 Minute vom aktuellen Modifier ab (kann auch ins Negative gehen = Bonus)
-        playerStates[team][player].modifier -= 1;
-        
-        console.log(`[SHOP] Team ${team} Sp. ${player} hat Cooldown reduziert (-1min)`);
-        res.json({ success: true, newBalance: teamWallets[team] });
-    } else {
-        res.status(404).json({ error: "Spieler nicht gefunden" });
+    if (!zone) return res.status(404).json({ error: "Zone nicht gefunden" });
+    if (zone.properties.locked) return res.status(403).json({ error: "Zone durch Admin gesperrt" });
+    
+  // NEU: EMP CHECK!
+    if (zone.properties.empUntil && zone.properties.empUntil > Date.now()) {
+        return res.status(403).json({ error: "⚡ Zone ist durch EMP gestört! Systemausfall." });
     }
+
+    const isGpsRequired = (globalMapData.gameSettings && globalMapData.gameSettings.gpsRequired === false) ? false : true;
+
+    // GPS Anti-Cheat
+    function getDistanceInMeters(lat1, lon1, lat2, lon2) { /* ... Deine Mathe Formel bleibt gleich ... */ 
+        const R = 6371e3; const p1 = lat1 * Math.PI / 180; const p2 = lat2 * Math.PI / 180;
+        const dp = (lat2 - lat1) * Math.PI / 180; const dl = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dp / 2) * Math.sin(dp / 2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); 
+    }
+    function getPolygonCenter(coordinates) { /* ... Deine Mathe Formel bleibt gleich ... */ 
+        let latSum = 0, lngSum = 0, count = 0; let coords = coordinates[0]; if(!Array.isArray(coords[0])) coords = coordinates;
+        for (let i = 0; i < coords.length; i++) { lngSum += coords[i][0]; latSum += coords[i][1]; count++; }
+        return { lat: latSum / count, lng: lngSum / count };
+    }
+
+    if (action !== 'trigger_items' && action !== 'defuse_traps' && isGpsRequired) { 
+        if (!playerLat || !playerLng) return res.status(400).json({ error: "Standort fehlt!" });
+        let center = getPolygonCenter(zone.geometry.coordinates);
+        if (getDistanceInMeters(playerLat, playerLng, center.lat, center.lng) > MAX_INTERACT_DISTANCE) return res.status(403).json({ error: `Zu weit entfernt!` });
+    }
+
+    let resultMessage = null;
+
+    if (action === 'upgrade') {
+        zone.properties.level += 1;
+    } else if (action === 'capture') { 
+        // TASCHENDIEB CHECK
+        let oldColor = zone.properties.color ? zone.properties.color.toLowerCase() : null;
+        let oldTeam = oldColor ? TEAM_COLORS[oldColor] : null;
+
+        if (oldTeam && oldTeam !== team) {
+            let invKey = `${team}_${player}`;
+            if (playerInventory[invKey] && playerInventory[invKey].pickpocket > 0) {
+                playerInventory[invKey].pickpocket -= 1; // Item verbraucht!
+                invNeedsSaving = true;
+
+                let victimCoins = teamWallets[oldTeam];
+                let stolen = Math.floor((victimCoins * 0.1) / 5) * 5; // Deine Mathe: 10%, abgerundet auf 5
+                
+                if (stolen > 0) {
+                    teamWallets[oldTeam] -= stolen;
+                    teamWallets[team] += stolen;
+                    resultMessage = `🕵️ Taschendieb! Du hast ${stolen} Coins von ${oldTeam.toUpperCase()} gestohlen!`;
+                } else {
+                    resultMessage = `🕵️ Taschendieb verbraucht. Team ${oldTeam.toUpperCase()} war leider pleite.`;
+                }
+            }
+        }
+
+        let isGray = (zone.properties.color === "#808080" || !zone.properties.color);
+        if (isGray && team) teamWallets[team] += 5;
+        
+        zone.properties.color = newColor; 
+        zone.properties.level = 1; 
+
+    } else if (action === 'attack') {
+        zone.properties.level -= 1;
+        if (zone.properties.level <= 0) { 
+            zone.properties.color = "#808080"; 
+            zone.properties.level = 0; 
+            delete zone.properties.traps; delete zone.properties.buffs; delete zone.properties.empUntil;
+        }
+    } else if (action === 'trigger_items') {
+        delete zone.properties.traps; delete zone.properties.buffs;
+        if (cooldownChange && team) {
+            if (!globalMapData.gameSettings) globalMapData.gameSettings = {};
+            if (!globalMapData.gameSettings.teamCooldowns) globalMapData.gameSettings.teamCooldowns = {rot:5, blau:5, gruen:5, gelb:5};
+            let currentCD = parseInt(globalMapData.gameSettings.teamCooldowns[team]) || 0;
+            globalMapData.gameSettings.teamCooldowns[team] = Math.max(0, currentCD + cooldownChange);
+            gameSettings.teamCooldowns[team] = Math.max(0, currentCD + cooldownChange);
+        }
+    } else if (action === 'defuse_traps') {
+        // ENTSCHÄRFUNGS-KIT CHECK
+        let invKey = `${team}_${player}`;
+        if (playerInventory[invKey] && playerInventory[invKey].defuse > 0) {
+            playerInventory[invKey].defuse -= 1; // Item verbraucht!
+            invNeedsSaving = true;
+            delete zone.properties.traps; // Fallen weg, kein Cooldown!
+        }
+    }
+
+    mapVersion = Date.now(); 
+    mapNeedsSaving = true;   
+    res.json({ success: true, stealMessage: resultMessage });
 });
 
 // ==========================================
 // ⏳ COOLDOWN- & SPIELER-STATUS SYSTEM
 // ==========================================
-// Initialisiere die States jetzt mit einem modifier-Feld
 let playerStates = {
-    rot:  { "1": { lastScan: 0, modifier: 0 }, "2": { lastScan: 0, modifier: 0 }, "3": { lastScan: 0, modifier: 0 } },
-    blau: { "1": { lastScan: 0, modifier: 0 }, "2": { lastScan: 0, modifier: 0 }, "3": { lastScan: 0, modifier: 0 } },
-    gruen:{ "1": { lastScan: 0, modifier: 0 }, "2": { lastScan: 0, modifier: 0 }, "3": { lastScan: 0, modifier: 0 } },
-    gelb: { "1": { lastScan: 0, modifier: 0 }, "2": { lastScan: 0, modifier: 0 }, "3": { lastScan: 0, modifier: 0 } }
+    rot:  { "1": { lastScan: 0 }, "2": { lastScan: 0 }, "3": { lastScan: 0 } },
+    blau: { "1": { lastScan: 0 }, "2": { lastScan: 0 }, "3": { lastScan: 0 } },
+    gruen:{ "1": { lastScan: 0 }, "2": { lastScan: 0 }, "3": { lastScan: 0 } },
+    gelb: { "1": { lastScan: 0 }, "2": { lastScan: 0 }, "3": { lastScan: 0 } }
 };
 
 app.post('/api/player-scan', (req, res) => {
-    const { team, player, timestamp, modifier } = req.body; // Modifier vom Handy empfangen
-    
+    const { team, player, timestamp } = req.body; 
     if (playerStates[team] && playerStates[team][player]) {
         playerStates[team][player].lastScan = timestamp;
-        playerStates[team][player].modifier = modifier || 0; // Hier speichern!
-        console.log(`[SCAN] Team ${team} | Sp. ${player} | Mod: ${modifier} min.`);
     }
     res.json({ success: true });
 });
 
 app.get('/api/admin/cooldown-states', (req, res) => {
     let currentDurations = { rot: 5, blau: 5, gruen: 5, gelb: 5 };
-    if (gameSettings && gameSettings.teamCooldowns) {
-        currentDurations = gameSettings.teamCooldowns;
-    }
+    if (gameSettings && gameSettings.teamCooldowns) currentDurations = gameSettings.teamCooldowns;
     res.json({ states: playerStates, durations: currentDurations });
 });
 
@@ -246,134 +556,28 @@ app.post('/api/reset-cooldowns', (req, res) => {
     for (let t in playerStates) {
         for (let p in playerStates[t]) {
             playerStates[t][p].lastScan = 0;
-            playerStates[t][p].modifier = 0; // Auch die Strafen löschen!
         }
     }
     res.json({ success: true, resetTime: now });
 });
+
+
 // ==========================================
-// ⚡ SUPER-SCHNELLE SCANNER-ROUTEN (NEU)
-// ==========================================
-// 1. Scanner fragt nur EINE Zone ab (Spart 99% Traffic)
-app.get('/api/zone/:code', (req, res) => {
-    if (!globalMapData.features) return res.status(404).json({ error: "Keine Zonen gefunden" });
-    
-    // Sucht die Zone blitzschnell im RAM
-    const zone = globalMapData.features.find(f => f.properties && f.properties.code === req.params.code);
-    if (!zone) return res.status(404).json({ error: "Zone nicht gefunden" });
-    
-    // Schickt nur die Eigenschaften dieser einen Zone und die Settings
-    res.json({ 
-        zone: zone.properties, 
-        gameSettings: globalMapData.gameSettings || {}
-    });
-});
-
-// 2. Scanner führt Aktion 
-app.post('/api/zone-action', (req, res) => {
-    const { code, action, newColor, playerLat, playerLng, team, cooldownChange } = req.body;
-    let zone = globalMapData.features.find(f => f.properties && f.properties.code === code);
-    
-    if (!zone) return res.status(404).json({ error: "Zone nicht gefunden" });
-    if (zone.properties.locked) return res.status(403).json({ error: "Zone gesperrt" });
-
-    const isGpsRequired = (globalMapData.gameSettings && globalMapData.gameSettings.gpsRequired === false) ? false : true;
-
-    if (action !== 'trigger_items' && isGpsRequired) { 
-        if (!playerLat || !playerLng) {
-            return res.status(400).json({ error: "Standort fehlt! Bitte aktiviere GPS." });
-        }
-        let center = getPolygonCenter(zone.geometry.coordinates);
-        let distance = getDistanceInMeters(playerLat, playerLng, center.lat, center.lng);
-        
-        if (distance > MAX_INTERACT_DISTANCE) {
-            return res.status(403).json({ error: `Zu weit entfernt! Du bist ${Math.round(distance)}m entfernt.` });
-        }
-    }
-
-    if (action === 'upgrade') {
-        zone.properties.level += 1;
-    } else if (action === 'capture') { 
-        zone.properties.color = newColor; 
-        zone.properties.level = 1; 
-    } else if (action === 'attack') {
-        zone.properties.level -= 1;
-        if (zone.properties.level <= 0) { 
-            zone.properties.color = "#808080"; 
-            zone.properties.level = 0; 
-        }
-    } else if (action === 'trigger_items') {
-        // Fallen löschen
-        delete zone.properties.traps;
-        delete zone.properties.buffs;
-        
-        // GLOBALEN COOLDOWN DES TEAMS ÄNDERN!
-        if (cooldownChange && team) {
-            if (!globalMapData.gameSettings) globalMapData.gameSettings = {};
-            if (!globalMapData.gameSettings.teamCooldowns) globalMapData.gameSettings.teamCooldowns = {rot:5, blau:5, gruen:5, gelb:5};
-            
-            let currentCD = parseInt(globalMapData.gameSettings.teamCooldowns[team]) || 0;
-            currentCD += cooldownChange; 
-            if (currentCD < 0) currentCD = 0; // Nicht unter 0 Minuten fallen
-            
-            // Speichern in beiden Server-RAMs
-            globalMapData.gameSettings.teamCooldowns[team] = currentCD;
-            gameSettings.teamCooldowns[team] = currentCD;
-            console.log(`[ITEM WIRKUNG] Team ${team} Cooldown ist jetzt ${currentCD} Min.`);
-        }
-    }
-
-    mapVersion = Date.now(); 
-    mapNeedsSaving = true;   
-    res.json({ success: true });
-});
-
-// NEU: Freikauf-Route (Ändert den globalen Team-Wert!)
-app.post('/api/reduce-cooldown', (req, res) => {
-    const { team } = req.body;
-    const REDUCE_PRICE = 50; 
-    
-    if (teamWallets[team] < REDUCE_PRICE) return res.status(400).json({ error: "Nicht genug Münzen zum Freikaufen!" });
-
-    teamWallets[team] -= REDUCE_PRICE;
-    
-    if (!globalMapData.gameSettings) globalMapData.gameSettings = {};
-    if (!globalMapData.gameSettings.teamCooldowns) globalMapData.gameSettings.teamCooldowns = {rot:5, blau:5, gruen:5, gelb:5};
-    
-    let currentCD = parseInt(globalMapData.gameSettings.teamCooldowns[team]) || 0;
-    currentCD -= 2; // Zieht 2 Minuten vom Team ab
-    if (currentCD < 0) currentCD = 0;
-    
-    globalMapData.gameSettings.teamCooldowns[team] = currentCD;
-    gameSettings.teamCooldowns[team] = currentCD;
-
-    mapVersion = Date.now();
-    mapNeedsSaving = true;
-    
-    console.log(`[SHOP] Team ${team} hat sich freigekauft. Neuer Cooldown: ${currentCD} Min.`);
-    res.json({ success: true, newBalance: teamWallets[team] });
-});
-// ==========================================
-// 📍 SPIELER STANDORTE
-// ==========================================
-// ==========================================
-// 📍 SPIELER STANDORTE & GPS-SPUREN (TRAILS)
+// 📍 SPIELER STANDORTE & TRAILS
 // ==========================================
 let playerLocations = {};
 let playerTrails = {}; 
 let trailsNeedSaving = false;
 
-// 1. Beim Server-Start: Spuren von der Festplatte in den RAM laden
+// Beim Start Spuren laden
 if (fs.existsSync(TRAILS_FILE)) {
     try {
         playerTrails = JSON.parse(fs.readFileSync(TRAILS_FILE));
         console.log("✅ GPS-Spuren erfolgreich in den RAM geladen!");
-    } catch (e) {
-        console.error("❌ Fehler beim Laden der trails.json:", e);
-    }
+    } catch (e) { console.error("❌ Fehler beim Laden der trails.json:", e); }
 }
 
-// 2. Hintergrund-Job: Speichert die Spuren alle 10 Sekunden (wenn jemand gelaufen ist)
+// Spuren speichern (10 sekunden Intervall)
 setInterval(() => {
     if (trailsNeedSaving) {
         fs.writeFile(TRAILS_FILE, JSON.stringify(playerTrails, null, 2), (err) => {
@@ -383,135 +587,87 @@ setInterval(() => {
     }
 }, 10000);
 
-
+// Standort vom Handy empfangen
 app.post('/api/location', (req, res) => {
     const { id, lat, lng, team, name } = req.body;
     playerLocations[id] = { lat, lng, team, name, lastUpdate: new Date() };
 
-    // SPUREN-AUFZEICHNUNG:
+    // SPUREN AUFZEICHNUNG
     if (!playerTrails[id]) playerTrails[id] = { team: team, name: name, path: [] };
-    
     let path = playerTrails[id].path;
     
     if (path.length === 0) {
         path.push([lat, lng]);
-        trailsNeedSaving = true; // Markieren: Es gibt was Neues zum Speichern!
+        trailsNeedSaving = true;
     } else {
-        let lastPoint = path[path.length - 1];
-        let dist = getDistanceInMeters(lat, lng, lastPoint[0], lastPoint[1]);
-        if (dist > 5) {
+        let lastP = path[path.length - 1];
+        // Nur Punkte speichern, wenn Spieler mehr als 5 Meter gelaufen ist
+        if (getDistanceInMeters(lat, lng, lastP[0], lastP[1]) > 5) {
             path.push([lat, lng]);
-            trailsNeedSaving = true; // Markieren: Es gibt was Neues zum Speichern!
+            trailsNeedSaving = true;
         }
     }
-
     res.json({ status: "Location received" });
 });
 
-app.get('/api/location', (req, res) => {
-    res.json(playerLocations);
+app.get('/api/location', (req, res) => { 
+    res.json(playerLocations); 
 });
 
-// Admin holt sich die Spuren zum Zeichnen
-app.get('/api/trails', (req, res) => {
-    res.json(playerTrails);
+// Admin holt sich die Spuren
+app.get('/api/trails', (req, res) => { 
+    res.json(playerTrails); 
 });
 
-// Admin löscht die Spuren (Reset)
+// Admin löscht die Spuren
 app.post('/api/trails/reset', (req, res) => {
-    playerTrails = {}; // RAM leeren
-    
-    // SOFORT auch die Datei auf der Festplatte leeren
+    playerTrails = {}; 
     fs.writeFileSync(TRAILS_FILE, JSON.stringify({}));
     trailsNeedSaving = false; 
-    
-    console.log("[ADMIN] GPS-Spuren wurden komplett gelöscht.");
+    console.log("[ADMIN] GPS-Spuren gelöscht.");
     res.json({ success: true, message: "Spuren gelöscht" });
 });
 
 // ==========================================
-// 💬 CHAT SYSTEM (Versioniert!)
+// 💬 CHAT SYSTEM
 // ==========================================
 let chatMessages = []; 
-let chatVersion = Date.now(); // NEU: Der Server merkt sich den Chat-Versionsstand!
+let chatVersion = Date.now(); 
 
 app.get('/api/chat', (req, res) => {
     const clientVersion = parseInt(req.query.v) || 0;
-    
-    // Hat das Handy schon den neuesten Stand? Dann schick nichts!
-    if (clientVersion === chatVersion) {
-        return res.json({ unchanged: true }); 
-    }
-    
-    // Es gibt neue Nachrichten!
+    if (clientVersion === chatVersion) return res.json({ unchanged: true }); 
     res.json({ version: chatVersion, messages: chatMessages });
 });
 
 app.post('/api/chat', (req, res) => {
     try {
         const newMsg = req.body;
-        if (!newMsg || !newMsg.message) {
-            return res.status(400).json({ success: false, error: "Leere Nachricht" });
-        }
-        
+        if (!newMsg || !newMsg.message) return res.status(400).json({ success: false });
         newMsg.timestamp = Date.now();
         chatMessages.push(newMsg);
         
+        // Chat auf die letzten 200 Nachrichten beschränken
         if (chatMessages.length > 200) chatMessages.shift(); 
         
-        chatVersion = Date.now(); // NEU: Versionsnummer hochzählen, damit alle Handys updaten!
+        chatVersion = Date.now(); 
         res.json({ success: true });
-    } catch(err) {
-        console.error("Fehler beim Chat:", err);
-        res.status(500).json({ success: false, error: "Server Fehler" });
+    } catch(err) { 
+        res.status(500).json({ success: false }); 
     }
 });
 
 app.post('/api/chat/reset', (req, res) => {
     chatMessages = []; 
-    chatVersion = Date.now(); // NEU: Update erzwingen, damit bei allen der Chat sofort verschwindet!
+    chatVersion = Date.now(); 
     console.log("[ADMIN] Chat gelöscht.");
     res.json({ success: true });
 });
 
 // ==========================================
-// 📍 GPS ANTI-CHEAT LOGIK
-// ==========================================
-// Berechnet die Distanz zwischen zwei Koordinaten in Metern (Haversine Formel)
-function getDistanceInMeters(lat1, lon1, lat2, lon2) {
-    const R = 6371e3; // Erdradius in Metern
-    const p1 = lat1 * Math.PI / 180;
-    const p2 = lat2 * Math.PI / 180;
-    const dp = (lat2 - lat1) * Math.PI / 180;
-    const dl = (lon2 - lon1) * Math.PI / 180;
-
-    const a = Math.sin(dp / 2) * Math.sin(dp / 2) + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) * Math.sin(dl / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c; 
-}
-
-// Berechnet den absoluten Mittelpunkt eines Polygons (der Zone)
-function getPolygonCenter(coordinates) {
-    let latSum = 0, lngSum = 0, count = 0;
-    // Leaflet GeoJSON hat meistens ein Array in einem Array: [[[lng, lat], [lng, lat], ...]]
-    let coords = coordinates[0]; 
-    if(!Array.isArray(coords[0])) coords = coordinates; // Fallback
-
-    for (let i = 0; i < coords.length; i++) {
-        lngSum += coords[i][0]; // Achtung: GeoJSON speichert [Longitude, Latitude]
-        latSum += coords[i][1];
-        count++;
-    }
-    return { lat: latSum / count, lng: lngSum / count };
-}
-
-const MAX_INTERACT_DISTANCE = 60; // Erlaubte Entfernung in Metern (Großzügig wegen GPS-Ungenauigkeit)
-
-// ==========================================
-// SERVER START
+// 🚀 SERVER START
 // ==========================================
 app.listen(PORT, () => {
-    console.log(`Server läuft auf Port ${PORT}`);
-    console.log(`Zonen-Datei gespeichert unter: ${ZONES_FILE}`);
-    console.log(`📡 RAM-Datenbank aktiv! Polling optimiert.`);
+    console.log(`🚀 Server läuft auf Port ${PORT}`);
+    console.log(`📡 RAM-Datenbank aktiv! ONE-FILE Modus sauber formatiert.`);
 });

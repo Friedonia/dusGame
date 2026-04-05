@@ -822,6 +822,50 @@ function updateAdminCoins() {
 setInterval(updateAdminCoins, 5000);
 updateAdminCoins(); 
 
+window.adminManageInventory = function(actionType) {
+    let team = document.getElementById('admin-inv-team').value;
+    let player = document.getElementById('admin-inv-player').value;
+    let item = document.getElementById('admin-inv-item').value;
+    let amount = document.getElementById('admin-inv-amount').value;
+
+    fetch('/api/inventory/manage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            team: team,
+            player: player,
+            itemType: item,
+            amount: amount,
+            action: actionType
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if(data.success) {
+            alert(`✅ ${data.message}\nAktueller Bestand (${item}): ${data.inventory[item]}`);
+        } else {
+            alert(`❌ Fehler: ${data.error}`);
+        }
+    });
+};
+
+window.adminResetAllInventories = function() {
+    if (confirm("ACHTUNG: Möchtest du wirklich ALLE Gegenstände aus den Rucksäcken ALLER Spieler löschen? Das kann nicht rückgängig gemacht werden!")) {
+        fetch('/api/inventory/reset-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.success) {
+                alert("✅ " + data.message);
+            } else {
+                alert("❌ Fehler beim Zurücksetzen.");
+            }
+        });
+    }
+};
+
 window.manageCoins = function(action) {
     let teamSelect = document.getElementById('bank-team-select');
     let amountInput = document.getElementById('bank-amount');
