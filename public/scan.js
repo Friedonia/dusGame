@@ -160,37 +160,62 @@ function renderUI(props, gameSettings, inventory, showGpsText = true) {
     uiHtml += specialHtml;
 
     // 🚨 MINENFELD LOGIK
-    if (trapsTriggered > 0) {
-        // PASSIV: ENTSCHÄRFUNGS-KIT IM RUCKSACK?
+if (trapsTriggered > 0) {
+        // 1. Hat der Spieler ein Entschärfungs-Kit im Rucksack?
         if (inventory && inventory.defuse > 0) {
             uiHtml += `<div style="color:#ffcc00; font-weight:bold; margin-bottom:15px; border: 1px solid #ffcc00; padding: 10px; border-radius:8px; background:rgba(255,204,0,0.1);">
                 🛠️ ENTSCHÄRFUNGS-KIT EINGESETZT!<br><span style="font-size:12px; color:#ddd;">Du bist in ${trapsTriggered} Falle(n) getreten, aber dein Kit hat sie eliminiert!</span>
                </div>`;
             
-            // Server die Fallen heimlich löschen lassen (verbraucht das Item)
+            // Wir sagen dem Server: Lösche die Fallen!
             fetch('/api/zone-action', { 
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' }, 
                 body: JSON.stringify({ code: scannedCode, action: 'defuse_traps', team: team, player: myPlayerNum }) 
             });
-            inventory.defuse -= 1; // Lokal abziehen, damit es UI-mäßig stimmt
+            inventory.defuse -= 1; // Optisch im Scanner abziehen
+            
         } else {
-            // BOOM! Falle löst voll aus
+            // 2. Kein Kit! Die Falle schnappt zu!
             const now = Date.now();
             localStorage.setItem(`lastScanTime_${team}_${myPlayerNum}`, now); 
             
-            fetch('/api/player-scan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ team: team, player: myPlayerNum, timestamp: now }) });
-            fetch('/api/zone-action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: scannedCode, action: 'trigger_items', team: team, cooldownChange: trapsTriggered - buffsTriggered }) });
+            // Spieler-Uhr starten
+            fetch('/api/player-scan', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ team: team, player: myPlayerNum, timestamp: now }) 
+            });
+            
+            // 💣 WICHTIG: Hier wird 'trapsHit' an den Server gesendet für das Sprengmeister-Abzeichen!
+            fetch('/api/zone-action', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ 
+                    code: scannedCode, 
+                    action: 'trigger_items', 
+                    team: team, 
+                    player: myPlayerNum, 
+                    cooldownChange: trapsTriggered - buffsTriggered, 
+                    trapsHit: trapsTriggered  // <-- Das ist der entscheidende Wert für die Stats!
+                }) 
+            });
 
+            // Fette rote Fehlermeldung im Scanner anzeigen
             messageDiv.innerHTML = `<div style="color:#ff4444; border: 2px solid #ff4444; padding: 15px; border-radius:8px; background:rgba(255,0,0,0.1);">
                 💥 MINENFELD AUSGELÖST!<br>
                 <span style="font-size:14px; color:#ddd;">Du bist in ${trapsTriggered} Falle(n) getreten. Dein Team hat +${trapsTriggered} Min. Cooldown!</span>
                </div>`;
             returnBtn.style.display = "block"; 
-            return; // Abbruch! Keine Buttons anzeigen.
+            return; // Abbruch! Keine Knöpfe mehr anzeigen.
         }
     } else if (buffsTriggered > 0) {
-        fetch('/api/zone-action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: scannedCode, action: 'trigger_items', team: team, cooldownChange: -buffsTriggered }) });
+        // Falls nur Buffs da sind (und keine Fallen)
+        fetch('/api/zone-action', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ code: scannedCode, action: 'trigger_items', team: team, player: myPlayerNum, cooldownChange: -buffsTriggered }) 
+        });
         uiHtml += `<div style="color:#00ffcc; font-weight:bold; margin-bottom:15px; border: 1px solid #00ffcc; padding: 10px; border-radius:8px; background:rgba(0,255,200,0.1);">✨ BUFF GENUTZT (-${buffsTriggered} Min.)</div>`;
     }
 

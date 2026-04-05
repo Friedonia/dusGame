@@ -896,3 +896,11 @@ window.manageCoins = function(action) {
     })
     .catch(err => alert("⚠️ " + err.message));
 };
+
+window.adminResetStats = function() {
+    if (confirm("⚠️ Willst du wirklich alle persönlichen Spieler-Statistiken (Kilometer, Hacks, Abzeichen) löschen?")) {
+        fetch('/api/admin/reset-stats', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => alert(data.message));
+    }
+};

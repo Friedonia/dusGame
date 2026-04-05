@@ -348,22 +348,20 @@ app.post('/api/zones', (req, res) => {
 // ==========================================
 // 📊 SPIELER-AKTEN & STATISTIKEN (NEU)
 // ==========================================
-// ==========================================
-// 📊 SPIELER-AKTEN & STATISTIKEN (NEU)
-// ==========================================
-// 🚨 FIX: Alle 12 Spieler werden direkt beim Serverstart sauber geladen!
+// 🚨 FIX: Alle 12 Spieler werden direkt beim Serverstart sauber geladen, inklusive trapsHit!
 let playerStates = {
-    rot:  { "1": { lastScan: 0, hacks: 0, distance: 0 }, "2": { lastScan: 0, hacks: 0, distance: 0 }, "3": { lastScan: 0, hacks: 0, distance: 0 } },
-    blau: { "1": { lastScan: 0, hacks: 0, distance: 0 }, "2": { lastScan: 0, hacks: 0, distance: 0 }, "3": { lastScan: 0, hacks: 0, distance: 0 } },
-    gruen:{ "1": { lastScan: 0, hacks: 0, distance: 0 }, "2": { lastScan: 0, hacks: 0, distance: 0 }, "3": { lastScan: 0, hacks: 0, distance: 0 } },
-    gelb: { "1": { lastScan: 0, hacks: 0, distance: 0 }, "2": { lastScan: 0, hacks: 0, distance: 0 }, "3": { lastScan: 0, hacks: 0, distance: 0 } }
+    rot:  { "1": { lastScan: 0, hacks: 0, distance: 0, trapsHit: 0 }, "2": { lastScan: 0, hacks: 0, distance: 0, trapsHit: 0 }, "3": { lastScan: 0, hacks: 0, distance: 0, trapsHit: 0 } },
+    blau: { "1": { lastScan: 0, hacks: 0, distance: 0, trapsHit: 0 }, "2": { lastScan: 0, hacks: 0, distance: 0, trapsHit: 0 }, "3": { lastScan: 0, hacks: 0, distance: 0, trapsHit: 0 } },
+    gruen:{ "1": { lastScan: 0, hacks: 0, distance: 0, trapsHit: 0 }, "2": { lastScan: 0, hacks: 0, distance: 0, trapsHit: 0 }, "3": { lastScan: 0, hacks: 0, distance: 0, trapsHit: 0 } },
+    gelb: { "1": { lastScan: 0, hacks: 0, distance: 0, trapsHit: 0 }, "2": { lastScan: 0, hacks: 0, distance: 0, trapsHit: 0 }, "3": { lastScan: 0, hacks: 0, distance: 0, trapsHit: 0 } }
 };
 
 function getSafePlayerState(team, player) {
     if (!playerStates[team]) playerStates[team] = {};
-    if (!playerStates[team][player]) playerStates[team][player] = { lastScan: 0, hacks: 0, distance: 0 };
+    if (!playerStates[team][player]) playerStates[team][player] = { lastScan: 0, hacks: 0, distance: 0, trapsHit: 0 };
     if (typeof playerStates[team][player].hacks !== 'number') playerStates[team][player].hacks = 0;
     if (typeof playerStates[team][player].distance !== 'number') playerStates[team][player].distance = 0;
+    if (typeof playerStates[team][player].trapsHit !== 'number') playerStates[team][player].trapsHit = 0;
     return playerStates[team][player];
 }
 
@@ -391,7 +389,8 @@ app.get('/api/stats', (req, res) => {
         },
         personal: {
             hacks: pState.hacks,
-            distance: pState.distance.toFixed(2)
+            distance: pState.distance.toFixed(2),
+            trapsHit: pState.trapsHit // 🚨 NEU: Geht ans Dashboard
         },
         teamCooldowns: (globalMapData.gameSettings && globalMapData.gameSettings.teamCooldowns) ? globalMapData.gameSettings.teamCooldowns : {rot:0, blau:0, gruen:0, gelb:0}
     });
@@ -406,7 +405,7 @@ app.post('/api/player-scan', (req, res) => {
 
 app.get('/api/admin/cooldown-states', (req, res) => {
     let currentDurations = { rot: 5, blau: 5, gruen: 5, gelb: 5 };
-    let fallen = {}; // NEU: Gefallene Teams an Admin-Panel senden
+    let fallen = {}; 
     
     if (globalMapData.gameSettings) {
         if (globalMapData.gameSettings.teamCooldowns) currentDurations = globalMapData.gameSettings.teamCooldowns;
@@ -415,7 +414,6 @@ app.get('/api/admin/cooldown-states', (req, res) => {
     res.json({ states: playerStates, durations: currentDurations, fallenTeams: fallen });
 });
 
-// 🛠️ ADMIN RETTUNGS-ROUTE: Ein einzelnes gefallenes Team wiederbeleben!
 app.post('/api/admin/revive-team', (req, res) => {
     const { team } = req.body;
     if (!globalMapData.gameSettings) globalMapData.gameSettings = {};
@@ -446,6 +444,18 @@ app.post('/api/reset-cooldowns', (req, res) => {
     res.json({ success: true, resetTime: now });
 });
 
+// 🛠️ ADMIN RETTUNGS-ROUTE FÜR STATS: Alles auf 0 setzen
+app.post('/api/admin/reset-stats', (req, res) => {
+    for (let t in playerStates) {
+        for (let p in playerStates[t]) {
+            playerStates[t][p].hacks = 0;
+            playerStates[t][p].distance = 0;
+            playerStates[t][p].trapsHit = 0;
+        }
+    }
+    res.json({ success: true, message: "📊 Alle Spieler-Laufstatistiken & Abzeichen wurden gelöscht!" });
+});
+
 // ==========================================
 // ⚡ SUPER-SCHNELLE SCANNER-ROUTEN
 // ==========================================
@@ -461,7 +471,8 @@ app.get('/api/zone/:code', (req, res) => {
 });
 
 app.post('/api/zone-action', (req, res) => {
-    const { code, action, newColor, playerLat, playerLng, team, player, cooldownChange } = req.body;
+    // 🚨 NEU: 'trapsHit' aus dem Request auslesen
+    const { code, action, newColor, playerLat, playerLng, team, player, cooldownChange, trapsHit } = req.body;
     let zone = globalMapData.features.find(f => f.properties && f.properties.code === code);
     
     if (!zone) return res.status(404).json({ error: "Zone nicht gefunden" });
@@ -479,10 +490,13 @@ app.post('/api/zone-action', (req, res) => {
         if (getDistanceInMeters(playerLat, playerLng, center.lat, center.lng) > MAX_INTERACT_DISTANCE) return res.status(403).json({ error: `Zu weit entfernt!` });
     }
 
-    // 🕵️ HACKS ZÄHLEN FÜR STATISTIKEN
+    // 🕵️ HACKS & FALLEN ZÄHLEN FÜR STATISTIKEN
+    let pState = getSafePlayerState(team, player);
     if (['capture', 'upgrade', 'attack'].includes(action)) {
-        let pState = getSafePlayerState(team, player);
         pState.hacks += 1;
+    }
+    if (trapsHit > 0) {
+        pState.trapsHit += trapsHit;
     }
 
     let resultMessage = null;
@@ -577,6 +591,9 @@ app.post('/api/zone-action', (req, res) => {
 // ==========================================
 // 📍 SPIELER STANDORTE & TRAILS (MIT SCHRITTZÄHLER!)
 // ==========================================
+// ==========================================
+// 📍 SPIELER STANDORTE & TRAILS (MIT KALMAN-FILTER!)
+// ==========================================
 let playerLocations = {};
 let playerTrails = {}; 
 let trailsNeedSaving = false;
@@ -591,9 +608,40 @@ setInterval(() => {
 }, 10000);
 
 app.post('/api/location', (req, res) => {
-    const { id, lat, lng, team, name } = req.body;
-    playerLocations[id] = { lat, lng, team, name, lastUpdate: new Date() };
+    let { id, lat, lng, team, name } = req.body;
+    const now = Date.now();
 
+    // 🧠 GPS KALMAN-LITE & AUSREISSER-FILTER
+    if (playerLocations[id]) {
+        let lastLoc = playerLocations[id];
+        let timeDiffSec = (now - lastLoc.lastUpdate) / 1000;
+        if (timeDiffSec <= 0) timeDiffSec = 0.1; // Div/0 Schutz
+        
+        let dist = getDistanceInMeters(lastLoc.lat, lastLoc.lng, lat, lng);
+        let speedMps = dist / timeDiffSec; // Meter pro Sekunde
+
+        // 🛑 1. Ausreißer blockieren (Schneller als 12 m/s = ~43 km/h -> Spieler in der Stadt = unmöglich)
+        if (speedMps > 12) {
+            console.log(`🛡️ GPS-Ausreißer ignoriert: ${team} ${name} (${speedMps.toFixed(1)} m/s)`);
+            return res.json({ status: "Ignored (Jump)" });
+        }
+
+        // 🌊 2. Kalman-Lite Glättung (Exponential Moving Average)
+        // Beseitigt das "Zittern" an Ort und Stelle.
+        let smoothFactor = 0.6; // Normal: 60% neuer Wert, 40% alter Wert
+        if (speedMps < 1.0) {
+            // Wenn der Spieler fast steht, sehr stark glätten, damit die Position nicht wandert!
+            smoothFactor = 0.15; 
+        }
+
+        lat = lastLoc.lat + smoothFactor * (lat - lastLoc.lat);
+        lng = lastLoc.lng + smoothFactor * (lng - lastLoc.lng);
+    }
+
+    // Geglätteten Standort updaten
+    playerLocations[id] = { lat, lng, team, name, lastUpdate: now };
+
+    // 🐾 SPUREN & SCHRITTZÄHLER ZEICHNEN
     if (!playerTrails[id]) playerTrails[id] = { team: team, name: name, path: [] };
     let path = playerTrails[id].path;
     
@@ -603,6 +651,8 @@ app.post('/api/location', (req, res) => {
     } else {
         let lastP = path[path.length - 1];
         distAdded = getDistanceInMeters(lat, lng, lastP[0], lastP[1]);
+        
+        // Nur auf die Karte malen, wenn mehr als 5 Meter gelaufen (Verhindert "Tintenkleckse" auf der Karte)
         if (distAdded > 5) { 
             path.push([lat, lng]); trailsNeedSaving = true; 
         } else {
@@ -612,8 +662,8 @@ app.post('/api/location', (req, res) => {
 
     // 🏃‍♂️ SCHRITTZÄHLER FÜR DIE AKTE
     if (distAdded > 0) {
-        let pState = getSafePlayerState(team, name);
-        pState.distance += (distAdded / 1000); 
+        let pState = getSafePlayerState(team, name); // 'name' ist meist 1, 2, 3
+        pState.distance += (distAdded / 1000); // In km umrechnen
     }
 
     res.json({ status: "Location received" });

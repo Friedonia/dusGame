@@ -6,7 +6,8 @@
       "properties": {
         "color": "#808080",
         "type": "zone",
-        "code": "TR#9694#33"
+        "code": "TR#9694#33",
+        "level": 1
       },
       "geometry": {
         "type": "Polygon",
@@ -67,7 +68,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#3366ff",
+        "color": "#808080",
         "type": "zone",
         "code": "EH#6943#26",
         "level": 1
@@ -343,7 +344,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#ffcc00",
+        "color": "#808080",
         "type": "zone",
         "code": "TN#9539#35",
         "level": 1
@@ -415,7 +416,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#3366ff",
+        "color": "#808080",
         "type": "zone",
         "code": "RU#3802#19",
         "level": 1
@@ -575,7 +576,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#3366ff",
+        "color": "#808080",
         "type": "zone",
         "code": "UT#4627#30",
         "level": 1
@@ -631,10 +632,10 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#3366ff",
+        "color": "#808080",
         "type": "zone",
         "code": "RU#5321#17",
-        "level": 2,
+        "level": 1,
         "locked": false,
         "traps": [],
         "buffs": []
@@ -694,10 +695,10 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#3366ff",
+        "color": "#808080",
         "type": "zone",
         "code": "EI#8336#23",
-        "level": 2
+        "level": 1
       },
       "geometry": {
         "type": "Polygon",
@@ -754,7 +755,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#ffcc00",
+        "color": "#808080",
         "type": "zone",
         "code": "RN#8040#16",
         "level": 1
@@ -810,10 +811,10 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#33ff33",
+        "color": "#808080",
         "type": "zone",
         "code": "RT#3124#15",
-        "level": 3
+        "level": 1
       },
       "geometry": {
         "type": "Polygon",
@@ -870,7 +871,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#3366ff",
+        "color": "#808080",
         "type": "zone",
         "code": "HH#0623#17",
         "level": 1
@@ -973,7 +974,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#3366ff",
+        "color": "#808080",
         "type": "zone",
         "code": "MR#3672#26",
         "locked": false,
@@ -1170,8 +1171,9 @@
         "type": "zone",
         "code": "EN#0072#14",
         "locked": false,
-        "level": 0,
-        "hqTeam": ""
+        "level": 1,
+        "traps": [],
+        "buffs": []
       },
       "geometry": {
         "type": "Polygon",
@@ -1208,11 +1210,11 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#3366ff",
+        "color": "#808080",
         "type": "zone",
         "code": "MR#2559#29",
         "level": 1,
-        "isKotH": true,
+        "isKotH": false,
         "hqTeam": ""
       },
       "geometry": {
@@ -1310,7 +1312,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#3366ff",
+        "color": "#808080",
         "type": "zone",
         "code": "EN#7240#18",
         "level": 1,
@@ -1877,7 +1879,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#3366ff",
+        "color": "#808080",
         "type": "zone",
         "code": "IM#5265#28",
         "level": 1
@@ -2741,9 +2743,6 @@
       "gelb": 5
     },
     "payoutInterval": 42,
-    "cooldownResetTime": 1775416197806,
-    "fallenTeams": {
-      "rot": false
-    }
+    "cooldownResetTime": 1775416197806
   }
 }
