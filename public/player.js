@@ -327,26 +327,40 @@ function updateMap() {
 }
 
 // ==========================================
-// ⏳ COOLDOWN CHECK (Steuert die neue Box)
+// ⏳ COOLDOWN CHECK & FREIKAUF
 // ==========================================
 window.isCooldownActive = false;
+
+window.buyCooldownReduction = function() {
+    if (confirm("Möchtest du 50 Münzen ausgeben, um den globalen Cooldown für DEIN GANZES TEAM um 2 Minuten zu senken?")) {
+        fetch('/api/reduce-cooldown', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ team: myTeam })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) alert(data.error);
+            else alert("⚡ Cooldown für Team erfolgreich reduziert!");
+            // Die neue Zeit kommt beim nächsten 3-Sekunden Update automatisch vom Server!
+        });
+    }
+};
 
 setInterval(() => {
     let pNum = myPlayerNum; 
     let tName = myTeam; 
     
-    let modifier = parseInt(localStorage.getItem(`cooldownModifier_${tName}_${pNum}`) || localStorage.getItem(`cooldownModifier_${pNum}`)) || 0;
+    let lastScan = parseInt(localStorage.getItem(`lastScanTime_${tName}_${pNum}`)) || 0;
     
-    let effectiveCooldownMins = (globalCooldownMins || 0) + modifier;
-    if(effectiveCooldownMins < 0) effectiveCooldownMins = 0; 
+    // Einfach nur noch der globale Wert vom Server!
+    let effectiveCooldownMins = globalCooldownMins || 0; 
 
     let cdBox = document.getElementById('dedicated-cooldown-display');
     let submitBtn = document.querySelector('.btn-send');
     let manualInput = document.getElementById('manual-code-input');
 
-    if (effectiveCooldownMins > 0) {
-        let lastScanStr = localStorage.getItem(`lastScanTime_${tName}_${pNum}`) || localStorage.getItem(`lastScanTime_${pNum}`);
-        let lastScan = lastScanStr ? parseInt(lastScanStr) : 0;
+    if (lastScan > 0 && effectiveCooldownMins > 0) {
         let now = Date.now();
         let diff = (effectiveCooldownMins * 60000) - (now - lastScan);
         
@@ -360,32 +374,47 @@ setInterval(() => {
                 cdBox.style.borderColor = "#ff4444";
                 cdBox.style.background = "rgba(255, 68, 68, 0.1)";
                 cdBox.style.color = "#ff4444";
-                cdBox.innerHTML = `⏳ SCANNER KÜHLT AB<br><span style="font-size:32px;">${m}:${s < 10 ? '0':''}${s}</span>`;
+                cdBox.innerHTML = `⏳ SCANNER KÜHLT AB<br><span style="font-size:32px;">${m}:${s < 10 ? '0':''}${s}</span><br>
+                                   <div style="font-size:12px; color:#aaa;">(Team Basis-Cooldown: ${effectiveCooldownMins} Min)</div>
+                                   <button onclick="buyCooldownReduction()" style="margin-top:10px; background:#ffcc00; color:black; border:none; padding:8px; border-radius:5px; font-weight:bold; cursor:pointer;">⚡ Für 35💰 freikaufen (-1m)</button>`;
             }
             if(submitBtn) { submitBtn.disabled = true; submitBtn.style.opacity = "0.3"; }
             if(manualInput) { manualInput.disabled = true; }
             
         } else {
             window.isCooldownActive = false;
-            localStorage.setItem(`cooldownModifier_${tName}_${pNum}`, 0);
-            localStorage.setItem(`cooldownModifier_${pNum}`, 0); 
+            localStorage.setItem(`lastScanTime_${tName}_${pNum}`, 0);
+            
+            fetch('/api/player-scan', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ team: tName, player: pNum, timestamp: 0 })
+            }).catch(e => e);
             
             if(cdBox) {
                 cdBox.style.borderColor = "#00ffcc";
                 cdBox.style.background = "rgba(0, 255, 204, 0.1)";
                 cdBox.style.color = "#00ffcc";
-                cdBox.innerHTML = `✅ BEREIT FÜR DEN NÄCHSTEN SCAN!`;
+                cdBox.innerHTML = `✅ BEREIT FÜR DEN NÄCHSTEN SCAN!<br><div style="font-size:12px; color:#888;">(Basis-Cooldown: ${effectiveCooldownMins} Min)</div>`;
             }
             if(submitBtn) { submitBtn.disabled = false; submitBtn.style.opacity = "1"; }
             if(manualInput) { manualInput.disabled = false; }
         }
     } else {
         window.isCooldownActive = false;
+
         if(cdBox) {
-            cdBox.style.borderColor = "#444";
-            cdBox.style.background = "#222";
-            cdBox.style.color = "#aaa";
-            cdBox.innerHTML = `Scanner dauerhaft aktiv (Kein Cooldown)`;
+            if (globalCooldownMins === 0) {
+                cdBox.style.borderColor = "#444";
+                cdBox.style.background = "#222";
+                cdBox.style.color = "#aaa";
+                cdBox.innerHTML = `Scanner dauerhaft aktiv (Kein Cooldown)`;
+            } else {
+                cdBox.style.borderColor = "#00ffcc";
+                cdBox.style.background = "rgba(0, 255, 204, 0.1)";
+                cdBox.style.color = "#00ffcc";
+                cdBox.innerHTML = `✅ BEREIT FÜR DEN NÄCHSTEN SCAN!<br><div style="font-size:12px; color:#888;">(Basis-Cooldown: ${effectiveCooldownMins} Min)</div>`;
+            }
         }
         if(submitBtn) { submitBtn.disabled = false; submitBtn.style.opacity = "1"; }
         if(manualInput) { manualInput.disabled = false; }

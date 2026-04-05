@@ -6,6 +6,7 @@ const path = require('path');
 const app = express();
 const PORT = 3000;
 const ZONES_FILE = path.join(__dirname, 'zones.json');
+const TRAILS_FILE = path.join(__dirname, 'trails.json'); // NEU: Datei für die Spuren
 
 app.use(cors());
 app.use(express.json());
@@ -155,24 +156,52 @@ app.post('/api/zones', (req, res) => {
 });
 
 // Spieler kauft ein Item
+// 1. Shop-Logik für Stacking (Mehrere Fallen/Buffs)
 app.post('/api/shop', (req, res) => {
     const { team, zoneCode, itemType } = req.body;
+    const PRICE = 30; // Preis pro Item
     
-    if (teamWallets[team] < 30) return res.status(400).json({ error: "Nicht genug Coins!" });
-    if (!globalMapData.features) return res.status(404).json({ error: "Keine Zonen gefunden!" });
-    
-    // Sucht extrem schnell im RAM
+    if (teamWallets[team] < PRICE) return res.status(400).json({ error: "Nicht genug Coins!" });
+
     let zone = globalMapData.features.find(f => f.properties && f.properties.code === zoneCode);
     if (!zone) return res.status(404).json({ error: "Zone nicht gefunden!" });
 
-    teamWallets[team] -= 30;
-    if (itemType === 'trap') zone.properties.trap = team;
-    else if (itemType === 'buff') zone.properties.buff = team;
+    // Initialisiere Arrays falls sie noch nicht existieren
+    if (!zone.properties.traps) zone.properties.traps = [];
+    if (!zone.properties.buffs) zone.properties.buffs = [];
 
-    mapVersion = Date.now(); // NEUE VERSION!
-    mapNeedsSaving = true;   // Speichern vormerken
+    teamWallets[team] -= PRICE;
 
-    res.json({ success: true, newBalance: teamWallets[team], message: `${itemType} erfolgreich platziert!` });
+    if (itemType === 'trap') {
+        if (zone.properties.traps.length >= 5) return res.status(400).json({ error: "Maximal 5 Fallen erlaubt!" });
+        zone.properties.traps.push(team);
+    } else if (itemType === 'buff') {
+        if (zone.properties.buffs.length >= 5) return res.status(400).json({ error: "Maximal 5 Buffs erlaubt!" });
+        zone.properties.buffs.push(team);
+    }
+
+    mapVersion = Date.now();
+    mapNeedsSaving = true;
+    res.json({ success: true, newBalance: teamWallets[team], message: `${itemType} platziert!` });
+});
+
+// 2. NEU: Cooldown Freikauf-Route
+app.post('/api/reduce-cooldown', (req, res) => {
+    const { team, player } = req.body;
+    const REDUCE_PRICE = 35; // Kosten für -1 Minute Cooldown
+    
+    if (teamWallets[team] < REDUCE_PRICE) return res.status(400).json({ error: "Nicht genug Münzen zum Freikaufen!" });
+
+    if (playerStates[team] && playerStates[team][player]) {
+        teamWallets[team] -= REDUCE_PRICE;
+        // Wir ziehen 1 Minute vom aktuellen Modifier ab (kann auch ins Negative gehen = Bonus)
+        playerStates[team][player].modifier -= 1;
+        
+        console.log(`[SHOP] Team ${team} Sp. ${player} hat Cooldown reduziert (-1min)`);
+        res.json({ success: true, newBalance: teamWallets[team] });
+    } else {
+        res.status(404).json({ error: "Spieler nicht gefunden" });
+    }
 });
 
 // ==========================================
@@ -240,35 +269,28 @@ app.get('/api/zone/:code', (req, res) => {
     });
 });
 
-// 2. Scanner führt Aktion aus (Sicher & winziger Datenverbrauch)
-// 2. Scanner führt Aktion aus (MIT SCHALTBAREM GPS ANTI-CHEAT!)
+// 2. Scanner führt Aktion 
 app.post('/api/zone-action', (req, res) => {
-    const { code, action, newColor, playerLat, playerLng } = req.body;
+    const { code, action, newColor, playerLat, playerLng, team, cooldownChange } = req.body;
     let zone = globalMapData.features.find(f => f.properties && f.properties.code === code);
     
     if (!zone) return res.status(404).json({ error: "Zone nicht gefunden" });
     if (zone.properties.locked) return res.status(403).json({ error: "Zone gesperrt" });
 
-    // === GPS ANTI-CHEAT CHECK ===
-    // Wenn in den Settings nichts steht, ist GPS standardmäßig AN.
     const isGpsRequired = (globalMapData.gameSettings && globalMapData.gameSettings.gpsRequired === false) ? false : true;
 
-    if (action !== 'clear_items' && isGpsRequired) { 
+    if (action !== 'trigger_items' && isGpsRequired) { 
         if (!playerLat || !playerLng) {
             return res.status(400).json({ error: "Standort fehlt! Bitte aktiviere GPS." });
         }
-        
         let center = getPolygonCenter(zone.geometry.coordinates);
         let distance = getDistanceInMeters(playerLat, playerLng, center.lat, center.lng);
         
         if (distance > MAX_INTERACT_DISTANCE) {
-            console.log(`[ANTI-CHEAT] Scan blockiert! Spieler ist ${Math.round(distance)}m entfernt.`);
-            return res.status(403).json({ error: `Zu weit entfernt! Du bist ${Math.round(distance)}m vom Mittelpunkt der Zone weg. Max: ${MAX_INTERACT_DISTANCE}m.` });
+            return res.status(403).json({ error: `Zu weit entfernt! Du bist ${Math.round(distance)}m entfernt.` });
         }
     }
-    // ============================
 
-    // Aktion ausführen
     if (action === 'upgrade') {
         zone.properties.level += 1;
     } else if (action === 'capture') { 
@@ -280,29 +302,131 @@ app.post('/api/zone-action', (req, res) => {
             zone.properties.color = "#808080"; 
             zone.properties.level = 0; 
         }
-    } else if (action === 'clear_items') {
-        delete zone.properties.trap;
-        delete zone.properties.buff;
+    } else if (action === 'trigger_items') {
+        // Fallen löschen
+        delete zone.properties.traps;
+        delete zone.properties.buffs;
+        
+        // GLOBALEN COOLDOWN DES TEAMS ÄNDERN!
+        if (cooldownChange && team) {
+            if (!globalMapData.gameSettings) globalMapData.gameSettings = {};
+            if (!globalMapData.gameSettings.teamCooldowns) globalMapData.gameSettings.teamCooldowns = {rot:5, blau:5, gruen:5, gelb:5};
+            
+            let currentCD = parseInt(globalMapData.gameSettings.teamCooldowns[team]) || 0;
+            currentCD += cooldownChange; 
+            if (currentCD < 0) currentCD = 0; // Nicht unter 0 Minuten fallen
+            
+            // Speichern in beiden Server-RAMs
+            globalMapData.gameSettings.teamCooldowns[team] = currentCD;
+            gameSettings.teamCooldowns[team] = currentCD;
+            console.log(`[ITEM WIRKUNG] Team ${team} Cooldown ist jetzt ${currentCD} Min.`);
+        }
     }
 
     mapVersion = Date.now(); 
     mapNeedsSaving = true;   
-    
     res.json({ success: true });
+});
+
+// NEU: Freikauf-Route (Ändert den globalen Team-Wert!)
+app.post('/api/reduce-cooldown', (req, res) => {
+    const { team } = req.body;
+    const REDUCE_PRICE = 50; 
+    
+    if (teamWallets[team] < REDUCE_PRICE) return res.status(400).json({ error: "Nicht genug Münzen zum Freikaufen!" });
+
+    teamWallets[team] -= REDUCE_PRICE;
+    
+    if (!globalMapData.gameSettings) globalMapData.gameSettings = {};
+    if (!globalMapData.gameSettings.teamCooldowns) globalMapData.gameSettings.teamCooldowns = {rot:5, blau:5, gruen:5, gelb:5};
+    
+    let currentCD = parseInt(globalMapData.gameSettings.teamCooldowns[team]) || 0;
+    currentCD -= 2; // Zieht 2 Minuten vom Team ab
+    if (currentCD < 0) currentCD = 0;
+    
+    globalMapData.gameSettings.teamCooldowns[team] = currentCD;
+    gameSettings.teamCooldowns[team] = currentCD;
+
+    mapVersion = Date.now();
+    mapNeedsSaving = true;
+    
+    console.log(`[SHOP] Team ${team} hat sich freigekauft. Neuer Cooldown: ${currentCD} Min.`);
+    res.json({ success: true, newBalance: teamWallets[team] });
 });
 // ==========================================
 // 📍 SPIELER STANDORTE
 // ==========================================
+// ==========================================
+// 📍 SPIELER STANDORTE & GPS-SPUREN (TRAILS)
+// ==========================================
 let playerLocations = {};
+let playerTrails = {}; 
+let trailsNeedSaving = false;
+
+// 1. Beim Server-Start: Spuren von der Festplatte in den RAM laden
+if (fs.existsSync(TRAILS_FILE)) {
+    try {
+        playerTrails = JSON.parse(fs.readFileSync(TRAILS_FILE));
+        console.log("✅ GPS-Spuren erfolgreich in den RAM geladen!");
+    } catch (e) {
+        console.error("❌ Fehler beim Laden der trails.json:", e);
+    }
+}
+
+// 2. Hintergrund-Job: Speichert die Spuren alle 10 Sekunden (wenn jemand gelaufen ist)
+setInterval(() => {
+    if (trailsNeedSaving) {
+        fs.writeFile(TRAILS_FILE, JSON.stringify(playerTrails, null, 2), (err) => {
+            if (err) console.error("❌ Fehler beim Speichern der Trails:", err);
+            else trailsNeedSaving = false;
+        });
+    }
+}, 10000);
+
 
 app.post('/api/location', (req, res) => {
     const { id, lat, lng, team, name } = req.body;
     playerLocations[id] = { lat, lng, team, name, lastUpdate: new Date() };
+
+    // SPUREN-AUFZEICHNUNG:
+    if (!playerTrails[id]) playerTrails[id] = { team: team, name: name, path: [] };
+    
+    let path = playerTrails[id].path;
+    
+    if (path.length === 0) {
+        path.push([lat, lng]);
+        trailsNeedSaving = true; // Markieren: Es gibt was Neues zum Speichern!
+    } else {
+        let lastPoint = path[path.length - 1];
+        let dist = getDistanceInMeters(lat, lng, lastPoint[0], lastPoint[1]);
+        if (dist > 5) {
+            path.push([lat, lng]);
+            trailsNeedSaving = true; // Markieren: Es gibt was Neues zum Speichern!
+        }
+    }
+
     res.json({ status: "Location received" });
 });
 
 app.get('/api/location', (req, res) => {
     res.json(playerLocations);
+});
+
+// Admin holt sich die Spuren zum Zeichnen
+app.get('/api/trails', (req, res) => {
+    res.json(playerTrails);
+});
+
+// Admin löscht die Spuren (Reset)
+app.post('/api/trails/reset', (req, res) => {
+    playerTrails = {}; // RAM leeren
+    
+    // SOFORT auch die Datei auf der Festplatte leeren
+    fs.writeFileSync(TRAILS_FILE, JSON.stringify({}));
+    trailsNeedSaving = false; 
+    
+    console.log("[ADMIN] GPS-Spuren wurden komplett gelöscht.");
+    res.json({ success: true, message: "Spuren gelöscht" });
 });
 
 // ==========================================

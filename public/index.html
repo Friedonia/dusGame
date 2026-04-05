@@ -127,6 +127,13 @@
                 </div>
                 <button onclick="manageCoins('reset_all')" style="width:100%; margin-top:8px; padding: 8px 5px; background:#f38c05; color:black; border:none; border-radius:3px; font-weight:bold; cursor:pointer; font-size:12px;">💸 Alle Kassen auf 0 setzen</button>
             </div>
+            <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #555;">
+                <button onclick="fetchAndDrawTrails(this)" style="background:#444; color:white; border:1px solid #666; padding:8px; border-radius:5px; width:100%; cursor:pointer; font-weight:bold; font-size:12px;">🗺️ GPS Spuren jetzt laden</button>
+                <label style="font-size: 13px; margin-top:8px; display:block; cursor:pointer;">
+                    <input type="checkbox" id="show-trails-toggle" onchange="toggleTrailsLayer()" checked> 🐾 Spuren anzeigen
+                </label>
+                <button onclick="resetTrails()" style="background:transparent; color:#ff4444; border:none; width:100%; text-align:right; font-size:11px; margin-top:5px; cursor:pointer;">🗑️ Spuren löschen</button>
+            </div>
         </div>
     </div>
 

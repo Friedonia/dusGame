@@ -574,7 +574,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#808080",
+        "color": "#3366ff",
         "type": "zone",
         "code": "UT#4627#30",
         "level": 1
@@ -630,11 +630,13 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#808080",
+        "color": "#3366ff",
         "type": "zone",
         "code": "RU#5321#17",
-        "level": 1,
-        "locked": false
+        "level": 2,
+        "locked": false,
+        "traps": [],
+        "buffs": []
       },
       "geometry": {
         "type": "Polygon",
@@ -1163,11 +1165,13 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#808080",
+        "color": "#ff3333",
         "type": "zone",
         "code": "EN#0072#14",
         "locked": false,
-        "level": 1
+        "level": 1,
+        "traps": [],
+        "buffs": []
       },
       "geometry": {
         "type": "Polygon",
@@ -1653,7 +1657,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#808080",
+        "color": "#ff3333",
         "type": "zone",
         "code": "HN#3531#19",
         "level": 1,
@@ -2726,12 +2730,12 @@
       "timestamp": 1775339942625
     },
     "teamCooldowns": {
-      "rot": 5,
+      "rot": 6,
       "blau": 5,
       "gruen": 5,
       "gelb": 5
     },
-    "payoutInterval": 45,
+    "payoutInterval": 42,
     "cooldownResetTime": 1775242288194
   }
 }

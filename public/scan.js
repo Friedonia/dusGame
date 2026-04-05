@@ -78,7 +78,6 @@ if (!team) {
         // ==========================================
         // 📍 GPS ODER SOFORT STARTEN?
         // ==========================================
-        // Prüfen, ob der Admin GPS ausgemacht hat. Wenn nichts da steht, ist es AN.
         const isGpsRequired = gameSettings.gpsRequired !== false;
 
         if (isGpsRequired) {
@@ -88,7 +87,7 @@ if (!team) {
                 navigator.geolocation.getCurrentPosition((position) => {
                     currentLat = position.coords.latitude;
                     currentLng = position.coords.longitude;
-                    renderUI(props, gameSettings); // GPS gefunden -> Knöpfe anzeigen!
+                    renderUI(props, gameSettings); 
                 }, (error) => {
                     messageDiv.innerHTML = `❌ <b>Fehler:</b> Der Admin hat den GPS-Zwang aktiviert! Bitte erlaube den Standort in deinem Browser.`;
                     returnBtn.style.display = "block";
@@ -98,7 +97,6 @@ if (!team) {
                 returnBtn.style.display = "block";
             }
         } else {
-            // Admin hat GPS ausgemacht -> Wir überspringen das Warten und zeigen sofort die Knöpfe!
             renderUI(props, gameSettings, false); 
         }
     })
@@ -109,40 +107,65 @@ if (!team) {
 }
 
 // ==========================================
-// 🖥️ UI AUFBAUEN (Wird gerufen, wenn GPS da ist oder ignoriert wird)
+// 🖥️ UI AUFBAUEN & FALLEN AUSLÖSEN
 // ==========================================
 function renderUI(props, gameSettings, showGpsText = true) {
     const newColor = teamColors[team];
     let isGray = (props.color === "#808080" || !props.color);
-    let trapTriggered = false;
-    let buffTriggered = false;
+    
+    let trapsTriggered = 0;
+    let buffsTriggered = 0;
 
-    if (props.trap && props.trap !== team) {
-        trapTriggered = true;
-        localStorage.setItem(`cooldownModifier_${team}_${myPlayerNum}`, 1);
+    if (props.traps && Array.isArray(props.traps)) {
+        props.traps.forEach(tColor => { if (tColor !== team) trapsTriggered++; });
     }
-    if (props.buff && props.buff === team) {
-        buffTriggered = true;
-        localStorage.setItem(`cooldownModifier_${team}_${myPlayerNum}`, -1);
+    if (props.buffs && Array.isArray(props.buffs)) {
+        props.buffs.forEach(bColor => { if (bColor === team) buffsTriggered++; });
     }
 
-    if (trapTriggered || buffTriggered) {
+    let totalMod = trapsTriggered - buffsTriggered;
+
+    if (totalMod !== 0) {
+        // Server mitteilen: Items löschen UND Team-Cooldown global ändern!
         fetch('/api/zone-action', { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ code: scannedCode, action: 'clear_items' }) 
+            body: JSON.stringify({ code: scannedCode, action: 'trigger_items', team: team, cooldownChange: totalMod }) 
         });
     }
 
     let uiHtml = "";
     if(showGpsText) {
         uiHtml += `<div style="text-align:center; margin-bottom:10px; color:#00ccff; font-size:12px;">📍 GPS verifiziert.</div>`;
-    } else {
-        uiHtml += `<div style="text-align:center; margin-bottom:10px; color:#ffcc00; font-size:12px;">⚠️ GPS-Zwang ist durch Admin deaktiviert.</div>`;
     }
-    
-    if (trapTriggered) uiHtml += `<div style="color:#ff4444; font-weight:bold; margin-bottom:15px; border: 1px solid #ff4444; padding: 10px; border-radius:8px; background:rgba(255,0,0,0.1);">💥 FALLE AUSGELÖST!<br><span style="font-size:13px; color:#ddd;">+1 Min. Cooldown-Strafe für deinen nächsten Scan!</span></div>`;
-    if (buffTriggered) uiHtml += `<div style="color:#00ffcc; font-weight:bold; margin-bottom:15px; border: 1px solid #00ffcc; padding: 10px; border-radius:8px; background:rgba(0,255,200,0.1);">✨ BUFF GENUTZT!<br><span style="font-size:13px; color:#ddd;">-1 Min. Cooldown-Bonus erhalten!</span></div>`;
+
+    // 🚨 ANTI-CHEAT: WENN EINE FALLE DA IST, DIREKT SPERREN!
+    if (trapsTriggered > 0) {
+        const now = Date.now();
+        localStorage.setItem(`lastScanTime_${team}_${myPlayerNum}`, now); 
+        
+        fetch('/api/player-scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ team: team, player: myPlayerNum, timestamp: now })
+        });
+
+        uiHtml += `<div style="color:#ff4444; font-weight:bold; margin-bottom:15px; border: 2px solid #ff4444; padding: 15px; border-radius:8px; background:rgba(255,0,0,0.1);">
+                    💥 MINENFELD AUSGELÖST!<br>
+                    <span style="font-size:14px; color:#ddd;">Du bist in ${trapsTriggered} Falle(n) getreten. Das hat den Cooldown für dein GESAMTES Team um ${trapsTriggered} Minuten erhöht!</span>
+                   </div>`;
+        uiHtml += `<p style="color:#aaa; text-align:center;">Abbruch. Keine Aktionen mehr möglich.</p>`;
+        
+        messageDiv.innerHTML = uiHtml;
+        returnBtn.style.display = "block"; 
+        return; 
+    }
+
+    if (buffsTriggered > 0) {
+        uiHtml += `<div style="color:#00ffcc; font-weight:bold; margin-bottom:15px; border: 1px solid #00ffcc; padding: 10px; border-radius:8px; background:rgba(0,255,200,0.1);">
+                    ✨ BUFF GENUTZT!<br><span style="font-size:13px; color:#ddd;">Dein gesamtes Team hat -${buffsTriggered} Min. Cooldown-Bonus erhalten!</span>
+                   </div>`;
+    }
 
     uiHtml += `<h3 style="color:#aaa; font-size:14px; text-transform:uppercase;">Wähle deine Aktion:</h3>`;
     
@@ -158,15 +181,14 @@ function renderUI(props, gameSettings, showGpsText = true) {
         uiHtml += `<button onclick="executeAction('attack')" class="btn" style="background:#ff3333; color:white;">⚔️ Angreifen (Gegner Lvl ${props.level})</button>`;
     }
 
-    // 🛒 SHOP
     if (gameSettings.shopEnabled !== false) {
         uiHtml += `<h3 style="color:#aaa; margin-top:20px; font-size:14px; text-transform:uppercase;">🛒 Shop (30 Coins):</h3>`;
-        if (isGray && !props.trap && !trapTriggered) {
+        if (isGray) {
             uiHtml += `<button onclick="buyShopItem('trap')" class="btn" style="background:#ff8800; color:white;">🪤 Falle legen (Zone bleibt grau)</button>`;
-        } else if (props.color === newColor && !props.buff && !buffTriggered) {
+        } else if (props.color === newColor) {
             uiHtml += `<button onclick="buyShopItem('buff')" class="btn" style="background:#00ffcc; color:black;">⚡ Cooldown-Buff platzieren</button>`;
         } else {
-            uiHtml += `<p style="font-size: 13px; color:#666; background:#111; padding:10px; border-radius:8px;">Der Shop ist an dieser Zone aktuell nicht nutzbar.</p>`;
+            uiHtml += `<p style="font-size: 13px; color:#666; background:#111; padding:10px; border-radius:8px;">Der Shop ist hier aktuell nicht nutzbar.</p>`;
         }
     }
 
@@ -179,11 +201,20 @@ function renderUI(props, gameSettings, showGpsText = true) {
 // ==========================================
 function registerScanToServer() {
     const now = Date.now();
+    // GANZ WICHTIG: Hier lesen wir den aktuellen Modifier aus dem Speicher und schicken ihn mit!
+    const currentModifier = parseInt(localStorage.getItem(`cooldownModifier_${team}_${myPlayerNum}`)) || 0;
+    
     localStorage.setItem(`lastScanTime_${team}_${myPlayerNum}`, now); 
+    
     fetch('/api/player-scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ team: team, player: myPlayerNum, timestamp: now })
+        body: JSON.stringify({ 
+            team: team, 
+            player: myPlayerNum, 
+            timestamp: now,
+            modifier: currentModifier // -> Teilt dem Admin-Panel die Strafzeit mit!
+        })
     }).catch(err => console.error(err));
 }
 

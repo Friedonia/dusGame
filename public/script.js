@@ -542,8 +542,7 @@ function updateAdminCooldowns() {
             let htmlStr = "";
             for (let team in data.states) {
                 let cdInput = document.getElementById('cd-' + team);
-                let durationMins = cdInput ? parseInt(cdInput.value) : (data.durations[team] || 0);
-                let durationMs = durationMins * 60000;
+                let baseDurationMins = cdInput ? parseInt(cdInput.value) : (data.durations[team] || 0);
                 
                 let isOpen = window.adminAccordionState[team];
                 let icon = isOpen ? '▼' : '▶';
@@ -553,16 +552,20 @@ function updateAdminCooldowns() {
                 <div style="margin-bottom: 5px; border: 1px solid #444; border-radius: 4px; overflow: hidden;">
                     <div onclick="toggleTeamAccordion('${team}')" style="background: #333; padding: 8px; cursor: pointer; display: flex; justify-content: space-between; border-left: 4px solid ${colors[team] || '#aaa'};">
                         <strong style="color:white;">Team ${team.toUpperCase()}</strong>
-                        <span style="color:#aaa; font-size: 12px;">(${durationMins} Min) <span id="cd-icon-${team}">${icon}</span></span>
+                        <span style="color:#aaa; font-size: 12px;">(${baseDurationMins} Min) <span id="cd-icon-${team}">${icon}</span></span>
                     </div>
                     <div id="cd-details-${team}" style="display: ${displayStyle}; padding: 10px; background: #222;">`;
 
                 for (let playerNum in data.states[team]) {
-                    let lastScan = data.states[team][playerNum].lastScan;
-                    let diff = durationMs - (now - lastScan);
+                    let pData = data.states[team][playerNum];
+                    let lastScan = pData.lastScan;
+                    
+                    // Effektive Dauer ist jetzt einfach immer der globale Team-Wert!
+                    let effectiveMs = baseDurationMins * 60000;
+                    let diff = effectiveMs - (now - lastScan);
+                    
                     let statusText = "";
-
-                    if (lastScan === 0 || diff <= 0 || durationMs === 0) {
+                    if (lastScan === 0 || diff <= 0 || effectiveMs <= 0) {
                         statusText = `<span style="color: #00ffcc; font-weight:bold;">Bereit</span>`;
                     } else {
                         let leftSecs = Math.ceil(diff / 1000);
@@ -722,6 +725,82 @@ window.resetAllCooldowns = function() {
                 if(typeof updateAdminCooldowns === 'function') updateAdminCooldowns();
             })
             .catch(err => alert("❌ Fehler beim Reset:\n" + err.message));
+    }
+};
+
+// ==========================================
+// 🐾 GPS-SPUREN (TRAILS) MANUELL LADEN
+// ==========================================
+var trailsGroup = L.layerGroup().addTo(map);
+
+window.fetchAndDrawTrails = function(btn) {
+    let oldText = btn.innerText;
+    btn.innerText = "⏳ Lade Spuren...";
+    btn.style.background = "#ffcc00";
+    btn.style.color = "#000";
+
+    fetch('/api/trails')
+        .then(res => res.json())
+        .then(trails => {
+            trailsGroup.clearLayers();
+            const colors = { rot: '#ff3333', blau: '#3366ff', gruen: '#33ff33', gelb: '#ffcc00' };
+
+            for (let id in trails) {
+                let tData = trails[id];
+                // Zeichne die Spur nur, wenn der Spieler mehr als einen Punkt gelaufen ist
+                if (tData.path.length > 1) {
+                    let teamColor = colors[tData.team] || '#ffffff';
+                    
+                    let polyline = L.polyline(tData.path, {
+                        color: teamColor,
+                        weight: 4,          // Dicke der Linie
+                        opacity: 0.6,       // Leicht transparent
+                        dashArray: '5, 10'  // Macht die Linie gestrichelt (wie Fußspuren!)
+                    });
+                    
+                    // Beim Drüberfahren mit der Maus zeigt es den Spielernamen an
+                    polyline.bindTooltip(`<b>${tData.name}</b> (${tData.team})`);
+                    trailsGroup.addLayer(polyline);
+                }
+            }
+
+            btn.innerText = "✅ Spuren gezeichnet!";
+            btn.style.background = "#33ff33";
+            
+            // Stellt sicher, dass die Checkbox an ist
+            document.getElementById('show-trails-toggle').checked = true;
+            toggleTrailsLayer();
+
+            // Setzt den Button nach 3 Sekunden zurück
+            setTimeout(() => {
+                btn.innerText = oldText;
+                btn.style.background = "#444";
+                btn.style.color = "white";
+            }, 3000);
+        })
+        .catch(err => {
+            btn.innerText = "❌ Fehler";
+            console.error(err);
+        });
+};
+
+window.toggleTrailsLayer = function() {
+    let isChecked = document.getElementById('show-trails-toggle').checked;
+    if (isChecked) {
+        map.addLayer(trailsGroup);
+    } else {
+        map.removeLayer(trailsGroup);
+    }
+};
+
+window.resetTrails = function() {
+    if(confirm("Möchtest du wirklich alle aufgezeichneten GPS-Spuren unwiderruflich löschen? (Z.B. für ein neues Spiel)")) {
+        fetch('/api/trails/reset', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            trailsGroup.clearLayers();
+            alert("✅ Spuren auf dem Server gelöscht.");
+        });
     }
 };
 
