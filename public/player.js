@@ -402,8 +402,7 @@ setInterval(() => {
                 cdBox.style.background = "rgba(255, 68, 68, 0.1)";
                 cdBox.style.color = "#ff4444";
                 cdBox.innerHTML = `⏳ SCANNER KÜHLT AB<br><span style="font-size:32px;">${m}:${s < 10 ? '0':''}${s}</span><br>
-                                   <div style="font-size:12px; color:#aaa;">(Team Basis-Cooldown: ${effectiveCooldownMins} Min)</div>
-                                   <button onclick="buyCooldownReduction()" style="margin-top:10px; background:#ffcc00; color:black; border:none; padding:8px; border-radius:5px; font-weight:bold; cursor:pointer;">⚡ Für 35💰 freikaufen (-1m)</button>`;
+                                   <div style="font-size:12px; color:#aaa;">(Team Basis-Cooldown: ${effectiveCooldownMins} Min)</div>`;
             }
             if(submitBtn) { submitBtn.disabled = true; submitBtn.style.opacity = "0.3"; }
             if(manualInput) { manualInput.disabled = true; }

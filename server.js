@@ -591,9 +591,7 @@ app.post('/api/zone-action', (req, res) => {
 // ==========================================
 // 📍 SPIELER STANDORTE & TRAILS (MIT SCHRITTZÄHLER!)
 // ==========================================
-// ==========================================
-// 📍 SPIELER STANDORTE & TRAILS (MIT KALMAN-FILTER!)
-// ==========================================
+
 let playerLocations = {};
 let playerTrails = {}; 
 let trailsNeedSaving = false;

@@ -4,10 +4,12 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#808080",
+        "color": "#3366ff",
         "type": "zone",
         "code": "TR#9694#33",
-        "level": 1
+        "level": 3,
+        "isKotH": false,
+        "hqTeam": "blau"
       },
       "geometry": {
         "type": "Polygon",
@@ -1023,10 +1025,10 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#808080",
+        "color": "#33ff33",
         "type": "zone",
         "code": "NI#5614#22",
-        "level": 1
+        "level": 2
       },
       "geometry": {
         "type": "Polygon",
@@ -1075,10 +1077,12 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#808080",
+        "color": "#33ff33",
         "type": "zone",
         "code": "TR#3259#24",
-        "level": 1
+        "level": 3,
+        "isKotH": false,
+        "hqTeam": "gruen"
       },
       "geometry": {
         "type": "Polygon",
@@ -1214,7 +1218,7 @@
         "type": "zone",
         "code": "MR#2559#29",
         "level": 1,
-        "isKotH": false,
+        "isKotH": true,
         "hqTeam": ""
       },
       "geometry": {
@@ -1312,12 +1316,12 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#808080",
+        "color": "#ff3333",
         "type": "zone",
         "code": "EN#7240#18",
-        "level": 1,
+        "level": 3,
         "isKotH": false,
-        "hqTeam": ""
+        "hqTeam": "rot"
       },
       "geometry": {
         "type": "Polygon",
@@ -1919,7 +1923,7 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#808080",
+        "color": "#ff3333",
         "type": "zone",
         "code": "EI#8705#23",
         "level": 1
