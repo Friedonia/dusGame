@@ -139,6 +139,25 @@ function renderUI(props, gameSettings, inventory, showGpsText = true) {
     }
 
     let uiHtml = "";
+    // ==========================================
+    // 👑 & 🏰 ANZEIGE FÜR BESONDERE ZONEN
+    // ==========================================
+    let specialHtml = "";
+    if (props.isKotH) {
+        specialHtml += `<div style="background:#222; border:1px solid #ffcc00; color:#ffcc00; padding:10px; border-radius:8px; margin-bottom:15px; font-weight:bold; text-align:center; box-shadow: 0 0 10px rgba(255, 204, 0, 0.3);">
+            👑 KING OF THE HILL<br><span style="font-size:12px; font-weight:normal; color:#aaa;">Generiert 3x so viele Coins!</span>
+        </div>`;
+    }
+    if (props.hqTeam) {
+        let teamNames = { rot: 'ROT', blau: 'BLAU', gruen: 'GRÜN', gelb: 'GELB' };
+        let hqColor = teamColors[props.hqTeam] || "#fff";
+        let armorText = props.hqArmorHit ? "<span style='color:#ff4444; font-size:12px;'>⚠️ Panzerung gebrochen! (Nächster Treffer senkt Level)</span>" : "<span style='color:#aaa; font-size:12px;'>🛡️ Panzerung aktiv (2 Angriffe nötig)</span>";
+        
+        specialHtml += `<div style="background:#222; border:1px solid ${hqColor}; color:${hqColor}; padding:10px; border-radius:8px; margin-bottom:15px; font-weight:bold; text-align:center; box-shadow: 0 0 10px ${hqColor};">
+            🏰 HAUPTQUARTIER ${teamNames[props.hqTeam] || ''}<br>${armorText}
+        </div>`;
+    }
+    uiHtml += specialHtml;
 
     // 🚨 MINENFELD LOGIK
     if (trapsTriggered > 0) {
@@ -255,16 +274,20 @@ window.executeAction = function(actionType) {
     fetch('/api/zone-action', { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
-        // WICHTIG: player muss mit, damit der Server den Taschendieb im Rucksack checken kann!
         body: JSON.stringify({ code: scannedCode, action: actionType, newColor: newColor, playerLat: currentLat, playerLng: currentLng, team: team, player: myPlayerNum }) 
     })
     .then(res => res.json())
     .then(result => {
         if(result.success) {
-            registerScanToServer();
-            // Taschendieb-Nachricht vom Server abgreifen, falls Item getriggert wurde!
+            // NEU: Wenn es ein freier Angriff auf ein gefallenes Team war, KEIN Cooldown starten!
+            if (!result.noCooldown) {
+                registerScanToServer();
+            }
+            
+            let cdNotice = result.noCooldown ? `<br><br><span style="color:#00ffcc; font-weight:bold;">🆓 Freier Angriff! (Gegner hat kein HQ)</span>` : "";
             let stealNotice = result.stealMessage ? `<br><br><span style="color:#ffcc00; font-weight:bold; background:#222; padding:5px; border-radius:5px; display:inline-block;">${result.stealMessage}</span>` : "";
-            messageDiv.innerHTML = `<h2 style="color:#33ff33; font-size:20px;">✅ Aktion erfolgreich!</h2><p>Zone gesichert.${stealNotice}</p>`;
+            
+            messageDiv.innerHTML = `<h2 style="color:#33ff33; font-size:20px;">✅ Aktion erfolgreich!</h2><p>Zone gesichert.${stealNotice}${cdNotice}</p>`;
         } else if (result.error) {
             messageDiv.innerHTML = `<h2 style="color:#ff4444; font-size:20px;">❌ Abgelehnt</h2><p>${result.error}</p>`;
         }

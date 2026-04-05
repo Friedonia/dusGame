@@ -9,15 +9,27 @@
   },
   "blau_2": {
     "trap": 2,
-    "buff": 2,
+    "buff": 3,
     "revive": 0,
-    "taschendieb": 0
+    "taschendieb": 0,
+    "emp": 0,
+    "defuse": 0,
+    "pickpocket": 0
   },
   "blau_1": {
     "trap": 0,
     "buff": 1,
     "revive": 0,
-    "pickpocket": null,
-    "defuse": null
+    "pickpocket": 0,
+    "defuse": 0,
+    "emp": 0
+  },
+  "blau_3": {
+    "trap": 0,
+    "buff": 0,
+    "revive": 0,
+    "emp": 0,
+    "defuse": 0,
+    "pickpocket": 0
   }
 }

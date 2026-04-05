@@ -1,4 +1,11 @@
 // ==========================================
+// 🎨 CSS INJECTION FÜR TRANSPARENTE LABELS
+// ==========================================
+const style = document.createElement('style');
+style.innerHTML = `.dummy-transparent { background: transparent; border: none; box-shadow: none; }`;
+document.head.appendChild(style);
+
+// ==========================================
 // 🔐 CODE-GENERATOR ALGORITHMUS
 // ==========================================
 const lettersList = ['R', 'E', 'I', 'H', 'N', 'T', 'U', 'R', 'M'];
@@ -139,6 +146,7 @@ function applyZoneStyle(layer) {
     
     if (!isVisible) {
         layer.setStyle({ opacity: 0, fillOpacity: 0 });
+        if (layer.getTooltip()) layer.unbindTooltip();
         return;
     }
 
@@ -149,6 +157,18 @@ function applyZoneStyle(layer) {
         if (props.level === 2) op = 0.65;
         if (props.level === 3) op = 0.9;
         layer.setStyle({ color: props.color, fillColor: props.color, opacity: 1, fillOpacity: op, dashArray: '' });
+    }
+
+    // 👑 🏰 HAUPTQUARTIER & KOTH TOOLTIPS (Markierungen)
+    if (layer.getTooltip()) layer.unbindTooltip();
+    let labels = [];
+    if (props.isKotH) labels.push("👑");
+    if (props.hqTeam) {
+        let icons = { rot: '🔴 HQ', blau: '🔵 HQ', gruen: '🟢 HQ', gelb: '🟡 HQ' };
+        labels.push(icons[props.hqTeam] || "🏰 HQ");
+    }
+    if (labels.length > 0 && isVisible) {
+        layer.bindTooltip(`<div style="background:rgba(0,0,0,0.7); padding:4px 8px; border-radius:6px; color:white; font-size:14px; border:1px solid #666; font-weight:bold;">${labels.join(" ")}</div>`, { permanent: true, direction: "center", className: 'dummy-transparent' });
     }
 }
 
@@ -182,7 +202,7 @@ function applyAllLegendFilters() {
 }
 
 // ==========================================
-// 🛠 POPUP GENERATOREN & ITEM LÖSCHEN
+// 🛠 POPUP GENERATOREN & HQ LOGIK
 // ==========================================
 function generateZonePopupContent(props) {
     let lvl = props.level || 1;
@@ -190,29 +210,81 @@ function generateZonePopupContent(props) {
     let lockState = props.locked ? "<span style='color:#ff4444;'>Gesperrt</span>" : "<span style='color:#33ff33;'>Aktiv</span>";
     let btnText = props.locked ? "🔓 Zone entsperren" : "🔒 Zone sperren";
     
-    let itemStatus = "<span style='color:#888;'>Keine</span>";
-    if (props.trap) {
-        itemStatus = `<span style='color:#ff8800; font-weight:bold;'>🪤 Falle (Team ${props.trap.toUpperCase()})</span> 
-                      <button onclick="removeZoneItem('${zCode}')" style="background:#ff4444; color:white; border:none; border-radius:3px; cursor:pointer; padding:2px 6px; margin-left:5px; font-size:11px;">🗑️</button>`;
-    } else if (props.buff) {
-        itemStatus = `<span style='color:#00ffcc; font-weight:bold;'>⚡ Buff (Team ${props.buff.toUpperCase()})</span> 
-                      <button onclick="removeZoneItem('${zCode}')" style="background:#ff4444; color:white; border:none; border-radius:3px; cursor:pointer; padding:2px 6px; margin-left:5px; font-size:11px;">🗑️</button>`;
-    }
+    let itemStatus = "";
+    if (props.traps && props.traps.length > 0) itemStatus += `<span style='color:#ff8800; font-weight:bold;'>🪤 ${props.traps.length} Falle(n)</span><br>`;
+    if (props.buffs && props.buffs.length > 0) itemStatus += `<span style='color:#00ffcc; font-weight:bold;'>⚡ ${props.buffs.length} Buff(s)</span><br>`;
+    if (props.empUntil && props.empUntil > Date.now()) itemStatus += `<span style='color:#ff3333; font-weight:bold;'>⚡ EMP AKTIV</span><br>`;
+
+    if (itemStatus === "") itemStatus = "<span style='color:#888;'>Keine</span>";
+
+    let deleteBtn = (props.traps?.length > 0 || props.buffs?.length > 0 || (props.empUntil && props.empUntil > Date.now())) 
+                    ? `<button onclick="removeZoneItem('${zCode}')" style="background:#ff4444; color:white; border:none; border-radius:3px; cursor:pointer; padding:4px; font-size:11px; width:100%; margin-top:5px;">🗑️ Items & EMP löschen</button>` 
+                    : "";
+
+    // 👑 KING OF THE HILL & HQ DROPDOWN
+    let kothHtml = `
+        <label style="display:block; margin-top:10px; cursor:pointer; background:#222; padding:5px; border-radius:4px; border:1px solid #444;">
+            <input type="checkbox" id="koth-${zCode}" onchange="updateZoneSpecial('${zCode}')" ${props.isKotH ? 'checked' : ''}>
+            👑 King of the Hill (3x Coins)
+        </label>
+    `;
+
+    let hqHtml = `
+        <label style="display:block; margin-top:5px; background:#222; padding:5px; border-radius:4px; border:1px solid #444;">
+            HQ Zuweisung:<br>
+            <select id="hq-${zCode}" onchange="updateZoneSpecial('${zCode}')" style="width:100%; background:#111; color:white; border:1px solid #555; padding:5px; margin-top:3px;">
+                <option value="">-- Kein HQ --</option>
+                <option value="rot" ${props.hqTeam === 'rot' ? 'selected' : ''}>🔴 HQ Rot</option>
+                <option value="blau" ${props.hqTeam === 'blau' ? 'selected' : ''}>🔵 HQ Blau</option>
+                <option value="gruen" ${props.hqTeam === 'gruen' ? 'selected' : ''}>🟢 HQ Grün</option>
+                <option value="gelb" ${props.hqTeam === 'gelb' ? 'selected' : ''}>🟡 HQ Gelb</option>
+            </select>
+        </label>
+    `;
     
-    return `<b>Zone</b><br>
-            Code: <span style="font-family:monospace; color:#00ffcc;">${zCode}</span><br>
-            Level: <b style="color:yellow;">${lvl}</b><br>
-            Status: <b>${lockState}</b><br>
-            Shop-Item: ${itemStatus}<br>
-            <hr style="border-color:#555; margin:8px 0;">
-            <button onclick="toggleZoneLock('${zCode}')" style="background:#444; color:white; border:1px solid #666; padding:6px; font-size:12px; cursor:pointer; border-radius:4px; width:100%; font-weight:bold;">${btnText}</button>`;
+    return `<div style="font-size:13px; font-family:sans-serif; min-width:180px;">
+                <b style="font-size:15px;">Zone</b><br>
+                Code: <span style="font-family:monospace; color:#00ffcc;">${zCode}</span><br>
+                Level: <b style="color:yellow;">${lvl}</b><br>
+                Status: <b>${lockState}</b><br>
+                <hr style="border-color:#555; margin:8px 0;">
+                <b>Aktive Items:</b><br> ${itemStatus} ${deleteBtn}
+                <hr style="border-color:#555; margin:8px 0;">
+                ${kothHtml}
+                ${hqHtml}
+                <hr style="border-color:#555; margin:8px 0;">
+                <button onclick="toggleZoneLock('${zCode}')" style="background:#444; color:white; border:1px solid #666; padding:6px; font-size:12px; cursor:pointer; border-radius:4px; width:100%; font-weight:bold;">${btnText}</button>
+            </div>`;
 }
+
+window.updateZoneSpecial = function(code) {
+    let isKotH = document.getElementById(`koth-${code}`).checked;
+    let hqTeam = document.getElementById(`hq-${code}`).value;
+
+    fetch('/api/admin/set-zone-special', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code, isKotH: isKotH, hqTeam: hqTeam })
+    })
+    .then(res => res.json())
+    .then(data => {
+        drawnItems.eachLayer(function(layer) {
+            if (layer.feature && layer.feature.properties && layer.feature.properties.code === code) {
+                layer.feature.properties.isKotH = isKotH;
+                layer.feature.properties.hqTeam = hqTeam;
+                applyZoneStyle(layer);
+            }
+        });
+        saveZones();
+    });
+};
 
 window.removeZoneItem = function(code) {
     drawnItems.eachLayer(function(layer) {
         if (layer.feature && layer.feature.properties && layer.feature.properties.code === code) {
-            delete layer.feature.properties.buff;
-            delete layer.feature.properties.trap;
+            delete layer.feature.properties.buffs;
+            delete layer.feature.properties.traps;
+            delete layer.feature.properties.empUntil;
             saveZones(); 
             if (layer.getPopup()) {
                 layer.setPopupContent(generateZonePopupContent(layer.feature.properties)); 
@@ -222,22 +294,23 @@ window.removeZoneItem = function(code) {
 };
 
 window.resetAllItems = function() {
-    if(confirm("⚠️ Sollen ALLE Buffs und Fallen auf der gesamten Karte gelöscht werden?")) {
+    if(confirm("⚠️ Sollen ALLE Buffs, Fallen und EMPs auf der gesamten Karte gelöscht werden?")) {
         let changed = false;
         drawnItems.eachLayer(function(layer) {
             if (layer.feature && layer.feature.properties && layer.feature.properties.type === "zone") {
-                if (layer.feature.properties.buff || layer.feature.properties.trap) {
-                    delete layer.feature.properties.buff;
-                    delete layer.feature.properties.trap;
+                if (layer.feature.properties.buffs || layer.feature.properties.traps || layer.feature.properties.empUntil) {
+                    delete layer.feature.properties.buffs;
+                    delete layer.feature.properties.traps;
+                    delete layer.feature.properties.empUntil;
                     changed = true;
                 }
             }
         });
         if (changed) {
             saveZones();
-            alert("✅ Alle Shop-Items (Buffs/Fallen) wurden von der Karte entfernt!");
+            alert("✅ Alle Shop-Items (Buffs/Fallen/EMPs) wurden von der Karte entfernt!");
         } else {
-            alert("ℹ️ Es gab keine aktiven Buffs oder Fallen.");
+            alert("ℹ️ Es gab keine aktiven Items.");
         }
     }
 };
@@ -351,6 +424,8 @@ map.on(L.Draw.Event.CREATED, function (event) {
         feature.properties.type = "zone";
         feature.properties.code = zoneCode;
         feature.properties.locked = false; 
+        feature.properties.isKotH = false;
+        feature.properties.hqTeam = "";
         
         applyZoneStyle(layer);
         makeEditable(layer);
@@ -411,224 +486,8 @@ map.on('popupclose', () => isPopupOpen = false);
 // ==========================================
 // 🔄 AUTOMATISCHE AKTUALISIERUNG (EFFIZIENTES POLLING)
 // ==========================================
-let currentMapVersion = 0; // Speichert den Versions-Stand!
+let currentMapVersion = 0; 
 
-function loadZonesFromServer() {
-    if (isEditingMap || isPopupOpen) return;
-
-    // Schickt die aktuelle Version ans Backend
-    fetch('/api/zones?v=' + currentMapVersion)
-    .then(res => res.json())
-    .then(response => {
-        // SERVER SAGT: NICHTS NEUES! Wir sparen extrem viel Traffic und brechen ab.
-        if (response.unchanged) {
-            return;
-        }
-
-        // SERVER SAGT: NEUE DATEN!
-        currentMapVersion = response.version;
-        let data = response.data;
-
-        if (data.gameSettings) {
-            let radarToggle = document.getElementById('global-radar-toggle');
-            if (radarToggle) radarToggle.checked = data.gameSettings.showPlayers === true;
-            
-            let freezeToggle = document.getElementById('global-freeze-toggle');
-            if (freezeToggle) freezeToggle.checked = data.gameSettings.gamePaused === true;
-
-            let shopToggle = document.getElementById('global-shop-toggle');
-            if (shopToggle && data.gameSettings.shopEnabled !== undefined) {
-                shopToggle.checked = data.gameSettings.shopEnabled;
-            }
-
-            let payoutInput = document.getElementById('payout-interval-input');
-            if (payoutInput && data.gameSettings.payoutInterval !== undefined && document.activeElement !== payoutInput) {
-                payoutInput.value = data.gameSettings.payoutInterval;
-            }
-
-            // Team Cooldowns laden
-            if (data.gameSettings.teamCooldowns) {
-                if (document.getElementById('cd-rot') && document.activeElement !== document.getElementById('cd-rot')) document.getElementById('cd-rot').value = data.gameSettings.teamCooldowns.rot || 0;
-                if (document.getElementById('cd-blau') && document.activeElement !== document.getElementById('cd-blau')) document.getElementById('cd-blau').value = data.gameSettings.teamCooldowns.blau || 0;
-                if (document.getElementById('cd-gruen') && document.activeElement !== document.getElementById('cd-gruen')) document.getElementById('cd-gruen').value = data.gameSettings.teamCooldowns.gruen || 0;
-                if (document.getElementById('cd-gelb') && document.activeElement !== document.getElementById('cd-gelb')) document.getElementById('cd-gelb').value = data.gameSettings.teamCooldowns.gelb || 0;
-            }
-
-            if (data.gameSettings.cooldownResetTime) window.globalCooldownResetTime = data.gameSettings.cooldownResetTime;
-
-            gameEndTime = data.gameSettings.endTime || null;
-            gameAnnouncement = data.gameSettings.announcement || null;
-        }
-        
-        drawnItems.clearLayers();
-        let needsSave = false;
-        
-        if (data.features && data.features.length > 0) {
-            L.geoJSON(data, {
-                pointToLayer: function (feature, latlng) {
-                    if (feature.properties.type === "nfc-tag") return L.marker(latlng, { icon: getNfcIcon(feature.properties.visibleToPlayers) });
-                    return L.marker(latlng);
-                },
-                style: function (feature) {
-                    if (feature.properties.type === "transit-line") return { color: feature.properties.color, weight: 4 };
-                },
-                onEachFeature: function (feature, layer) {
-                    if (feature.properties.type === "zone") {
-                        if (!feature.properties.code || !feature.properties.code.includes('#')) { feature.properties.code = generateSpecialCode(); needsSave = true; }
-                        applyZoneStyle(layer); 
-                        makeEditable(layer);
-                    } else if (feature.properties.type === "nfc-tag") {
-                        bindNfcPopup(layer);
-                    }
-                    drawnItems.addLayer(layer);
-                }
-            });
-            updateStatistics();
-            applyAllLegendFilters(); 
-            
-            if (needsSave) setTimeout(saveZones, 1000);
-        }
-    }).catch(err => console.log("Live-Update fehlgeschlagen:", err));
-}
-
-// 10 Sekunden Interval reicht völlig aus für das Admin-Panel
-setInterval(loadZonesFromServer, 10000); 
-loadZonesFromServer();
-
-// ==========================================
-// 📍 LIVE SPIELER STANDORTE
-// ==========================================
-function updateLiveLocations() {
-    fetch('/api/location?t=' + new Date().getTime()).then(res => res.json()).then(players => {
-        playerGroup.clearLayers();
-        const listDiv = document.getElementById('player-list');
-        if (Object.keys(players).length === 0) { listDiv.innerHTML = '<span style="color:#aaa;">Keine Spieler online</span>'; return; }
-        listDiv.innerHTML = '';
-        for (let id in players) {
-            const p = players[id];
-            let playerColor = p.team === 'rot' ? '#ff3333' : (p.team === 'blau' ? '#3366ff' : (p.team === 'gruen' ? '#33ff33' : '#ffcc00'));
-            L.circleMarker([p.lat, p.lng], { radius: 8, fillColor: playerColor, color: "#ffffff", weight: 2, fillOpacity: 1 }).addTo(playerGroup).bindTooltip(p.name + " (" + p.team + ")");
-            listDiv.innerHTML += `<div class="legend-item"><div class="circle-box" style="background:${playerColor}"></div>${p.name}</div>`;
-        }
-    }).catch(err => err);
-}
-setInterval(updateLiveLocations, 5000);
-
-// ==========================================
-// ⏳ LIVE SPIELER-COOLDOWNS IM ADMIN-PANEL 
-// ==========================================
-window.adminAccordionState = window.adminAccordionState || { rot: false, blau: false, gruen: false, gelb: false };
-
-window.toggleTeamAccordion = function(team) {
-    window.adminAccordionState[team] = !window.adminAccordionState[team];
-    let details = document.getElementById('cd-details-' + team);
-    let icon = document.getElementById('cd-icon-' + team);
-    if(details && icon) {
-        details.style.display = window.adminAccordionState[team] ? 'block' : 'none';
-        icon.innerText = window.adminAccordionState[team] ? '▼' : '▶';
-    }
-};
-
-function updateAdminCooldowns() {
-    fetch('/api/admin/cooldown-states?t=' + new Date().getTime())
-        .then(res => res.json())
-        .then(data => {
-            const container = document.getElementById('cooldown-live-view');
-            if (!container) return; 
-
-            const now = Date.now();
-            const colors = { rot: '#ff3333', blau: '#3366ff', gruen: '#33ff33', gelb: '#ffcc00' };
-
-            let htmlStr = "";
-            for (let team in data.states) {
-                let cdInput = document.getElementById('cd-' + team);
-                let baseDurationMins = cdInput ? parseInt(cdInput.value) : (data.durations[team] || 0);
-                
-                let isOpen = window.adminAccordionState[team];
-                let icon = isOpen ? '▼' : '▶';
-                let displayStyle = isOpen ? 'block' : 'none';
-
-                htmlStr += `
-                <div style="margin-bottom: 5px; border: 1px solid #444; border-radius: 4px; overflow: hidden;">
-                    <div onclick="toggleTeamAccordion('${team}')" style="background: #333; padding: 8px; cursor: pointer; display: flex; justify-content: space-between; border-left: 4px solid ${colors[team] || '#aaa'};">
-                        <strong style="color:white;">Team ${team.toUpperCase()}</strong>
-                        <span style="color:#aaa; font-size: 12px;">(${baseDurationMins} Min) <span id="cd-icon-${team}">${icon}</span></span>
-                    </div>
-                    <div id="cd-details-${team}" style="display: ${displayStyle}; padding: 10px; background: #222;">`;
-
-                for (let playerNum in data.states[team]) {
-                    let pData = data.states[team][playerNum];
-                    let lastScan = pData.lastScan;
-                    
-                    // Effektive Dauer ist jetzt einfach immer der globale Team-Wert!
-                    let effectiveMs = baseDurationMins * 60000;
-                    let diff = effectiveMs - (now - lastScan);
-                    
-                    let statusText = "";
-                    if (lastScan === 0 || diff <= 0 || effectiveMs <= 0) {
-                        statusText = `<span style="color: #00ffcc; font-weight:bold;">Bereit</span>`;
-                    } else {
-                        let leftSecs = Math.ceil(diff / 1000);
-                        let m = Math.floor(leftSecs / 60);
-                        let s = leftSecs % 60;
-                        statusText = `<span style="color: #ff8800; font-weight:bold;">⏳ ${m}:${s < 10 ? '0':''}${s}</span>`;
-                    }
-                    
-                    htmlStr += `<div style="display: flex; justify-content: space-between; margin-bottom: 4px; border-bottom: 1px solid #333; padding-bottom: 2px;">
-                                    <span style="color:#ddd;">Spieler ${playerNum}:</span> 
-                                    ${statusText}
-                                </div>`;
-                }
-                htmlStr += `</div></div>`;
-            }
-            container.innerHTML = htmlStr;
-        }).catch(err => console.log("Live-Cooldown Update Fehler:", err));
-}
-
-if (!window.adminCooldownInterval) {
-    window.adminCooldownInterval = setInterval(updateAdminCooldowns, 1000);
-}
-
-
-// ==========================================
-// 💾 SPEICHERN & RESET-BEFEHLE
-// ==========================================
-function saveZones() {
-    var geoJsonData = drawnItems.toGeoJSON();
-    
-    let toggleRadar = document.getElementById('global-radar-toggle');
-    let toggleFreeze = document.getElementById('global-freeze-toggle');
-    let toggleShop = document.getElementById('global-shop-toggle');
-    let toggleGps = document.getElementById('global-gps-toggle'); // NEU
-    let payoutVal = document.getElementById('payout-interval-input');
-    
-    let cdRot = document.getElementById('cd-rot');
-    let cdBlau = document.getElementById('cd-blau');
-    let cdGruen = document.getElementById('cd-gruen');
-    let cdGelb = document.getElementById('cd-gelb');
-    
-    geoJsonData.gameSettings = {
-        showPlayers: toggleRadar ? toggleRadar.checked : false,
-        gamePaused: toggleFreeze ? toggleFreeze.checked : false,
-        shopEnabled: toggleShop ? toggleShop.checked : true,
-        gpsRequired: toggleGps ? toggleGps.checked : true, // NEU: Standard ist "An"
-        endTime: gameEndTime,
-        announcement: gameAnnouncement,
-        teamCooldowns: {
-            rot: cdRot ? parseInt(cdRot.value) : 0,
-            blau: cdBlau ? parseInt(cdBlau.value) : 0,
-            gruen: cdGruen ? parseInt(cdGruen.value) : 0,
-            gelb: cdGelb ? parseInt(cdGelb.value) : 0
-        },
-        payoutInterval: payoutVal ? parseInt(payoutVal.value) : 45,
-        cooldownResetTime: window.globalCooldownResetTime || 0
-    };
-    
-    fetch('/api/zones', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geoJsonData) })
-    .then(res => res.json()).then(data => console.log("Auto-Save erfolgreich!")).catch(err => err);
-}
-
-// (In der loadZonesFromServer Funktion diesen Teil ergänzen):
 function loadZonesFromServer() {
     if (isEditingMap || isPopupOpen) return;
 
@@ -652,7 +511,6 @@ function loadZonesFromServer() {
                 shopToggle.checked = data.gameSettings.shopEnabled;
             }
 
-            // NEU: Lade den GPS Schalter Status
             let gpsToggle = document.getElementById('global-gps-toggle');
             if (gpsToggle && data.gameSettings.gpsRequired !== undefined) {
                 gpsToggle.checked = data.gameSettings.gpsRequired;
@@ -706,6 +564,172 @@ function loadZonesFromServer() {
     }).catch(err => console.log("Live-Update fehlgeschlagen:", err));
 }
 
+setInterval(loadZonesFromServer, 10000); 
+loadZonesFromServer();
+
+// ==========================================
+// 📍 LIVE SPIELER STANDORTE
+// ==========================================
+function updateLiveLocations() {
+    fetch('/api/location?t=' + new Date().getTime()).then(res => res.json()).then(players => {
+        playerGroup.clearLayers();
+        const listDiv = document.getElementById('player-list');
+        if (Object.keys(players).length === 0) { listDiv.innerHTML = '<span style="color:#aaa;">Keine Spieler online</span>'; return; }
+        listDiv.innerHTML = '';
+        for (let id in players) {
+            const p = players[id];
+            let playerColor = p.team === 'rot' ? '#ff3333' : (p.team === 'blau' ? '#3366ff' : (p.team === 'gruen' ? '#33ff33' : '#ffcc00'));
+            L.circleMarker([p.lat, p.lng], { radius: 8, fillColor: playerColor, color: "#ffffff", weight: 2, fillOpacity: 1 }).addTo(playerGroup).bindTooltip(p.name + " (" + p.team + ")");
+            listDiv.innerHTML += `<div class="legend-item"><div class="circle-box" style="background:${playerColor}"></div>${p.name}</div>`;
+        }
+    }).catch(err => err);
+}
+setInterval(updateLiveLocations, 5000);
+
+
+// ==========================================
+// ⏳ LIVE SPIELER-COOLDOWNS IM ADMIN-PANEL 
+// ==========================================
+window.adminAccordionState = window.adminAccordionState || { rot: false, blau: false, gruen: false, gelb: false };
+
+window.toggleTeamAccordion = function(team) {
+    window.adminAccordionState[team] = !window.adminAccordionState[team];
+    let details = document.getElementById('cd-details-' + team);
+    let icon = document.getElementById('cd-icon-' + team);
+    if(details && icon) {
+        details.style.display = window.adminAccordionState[team] ? 'block' : 'none';
+        icon.innerText = window.adminAccordionState[team] ? '▼' : '▶';
+    }
+};
+
+function updateAdminCooldowns() {
+    fetch('/api/admin/cooldown-states?t=' + new Date().getTime())
+        .then(res => res.json())
+        .then(data => {
+            const container = document.getElementById('cooldown-live-view');
+            if (!container) return; 
+
+            const now = Date.now();
+            const colors = { rot: '#ff3333', blau: '#3366ff', gruen: '#33ff33', gelb: '#ffcc00' };
+
+            let htmlStr = "";
+            for (let team in data.states) {
+                let cdInput = document.getElementById('cd-' + team);
+                
+                // 🚨 FIX FÜR NaN ERROR:
+                let baseDurationMins = 0;
+                if (cdInput && cdInput.value !== "") {
+                    baseDurationMins = parseInt(cdInput.value) || 0;
+                } else {
+                    baseDurationMins = data.durations[team] || 0;
+                }
+                
+                let isOpen = window.adminAccordionState[team];
+                let icon = isOpen ? '▼' : '▶';
+                let displayStyle = isOpen ? 'block' : 'none';
+
+                // 🚨 NEU: Der Rettungsbutton für HQ-verlust!
+                let isFallen = data.fallenTeams && data.fallenTeams[team];
+                let fallenWarning = isFallen ? `<button onclick="adminReviveTeam('${team}'); event.stopPropagation();" style="background:#ff4444; color:white; border:1px solid white; border-radius:3px; padding:2px 6px; font-size:11px; cursor:pointer; margin-left:10px; box-shadow: 0 0 5px red;">☠️ HQ ZERSTÖRT (Klick = Retten)</button>` : "";
+
+                htmlStr += `
+                <div style="margin-bottom: 5px; border: 1px solid #444; border-radius: 4px; overflow: hidden;">
+                    <div onclick="toggleTeamAccordion('${team}')" style="background: #333; padding: 8px; cursor: pointer; display: flex; justify-content: space-between; border-left: 4px solid ${colors[team] || '#aaa'}; align-items:center;">
+                        <strong style="color:white;">Team ${team.toUpperCase()} ${fallenWarning}</strong>
+                        <span style="color:#aaa; font-size: 12px;">(${baseDurationMins} Min) <span id="cd-icon-${team}">${icon}</span></span>
+                    </div>
+                    <div id="cd-details-${team}" style="display: ${displayStyle}; padding: 10px; background: #222;">`;
+
+                for (let playerNum in data.states[team]) {
+                    let pData = data.states[team][playerNum];
+                    let lastScan = pData.lastScan || 0; 
+                    
+                    let effectiveMs = baseDurationMins * 60000;
+                    let diff = effectiveMs - (now - lastScan);
+                    
+                    let statusText = "";
+                    if (lastScan === 0 || diff <= 0 || effectiveMs <= 0) {
+                        statusText = `<span style="color: #00ffcc; font-weight:bold;">Bereit</span>`;
+                    } else {
+                        let leftSecs = Math.ceil(diff / 1000);
+                        if (isNaN(leftSecs)) {
+                            statusText = `<span style="color: #aaa;">Bereit</span>`; // Sicherheitsnetz
+                        } else {
+                            let m = Math.floor(leftSecs / 60);
+                            let s = leftSecs % 60;
+                            statusText = `<span style="color: #ff8800; font-weight:bold;">⏳ ${m}:${s < 10 ? '0':''}${s}</span>`;
+                        }
+                    }
+                    
+                    htmlStr += `<div style="display: flex; justify-content: space-between; margin-bottom: 4px; border-bottom: 1px solid #333; padding-bottom: 2px;">
+                                    <span style="color:#ddd;">Spieler ${playerNum}:</span> 
+                                    ${statusText}
+                                </div>`;
+                }
+                htmlStr += `</div></div>`;
+            }
+            container.innerHTML = htmlStr;
+        }).catch(err => console.log("Live-Cooldown Update Fehler:", err));
+}
+
+if (!window.adminCooldownInterval) {
+    window.adminCooldownInterval = setInterval(updateAdminCooldowns, 1000);
+}
+
+// Die Funktion für den neuen HQ-Rettungs-Button
+window.adminReviveTeam = function(team) {
+    if(confirm(`Möchtest du Team ${team.toUpperCase()} aus dem 'Free Real Estate' Modus befreien?`)) {
+        fetch('/api/admin/revive-team', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({team: team})
+        }).then(res=>res.json()).then(data=>{
+            if(data.success) {
+                alert(`✅ Team ${team.toUpperCase()} ist wieder geschützt!`);
+                updateAdminCooldowns();
+            }
+        });
+    }
+};
+
+// ==========================================
+// 💾 SPEICHERN & RESET-BEFEHLE
+// ==========================================
+function saveZones() {
+    var geoJsonData = drawnItems.toGeoJSON();
+    
+    let toggleRadar = document.getElementById('global-radar-toggle');
+    let toggleFreeze = document.getElementById('global-freeze-toggle');
+    let toggleShop = document.getElementById('global-shop-toggle');
+    let toggleGps = document.getElementById('global-gps-toggle'); 
+    let payoutVal = document.getElementById('payout-interval-input');
+    
+    let cdRot = document.getElementById('cd-rot');
+    let cdBlau = document.getElementById('cd-blau');
+    let cdGruen = document.getElementById('cd-gruen');
+    let cdGelb = document.getElementById('cd-gelb');
+    
+    geoJsonData.gameSettings = {
+        showPlayers: toggleRadar ? toggleRadar.checked : false,
+        gamePaused: toggleFreeze ? toggleFreeze.checked : false,
+        shopEnabled: toggleShop ? toggleShop.checked : true,
+        gpsRequired: toggleGps ? toggleGps.checked : true, 
+        endTime: gameEndTime,
+        announcement: gameAnnouncement,
+        teamCooldowns: {
+            rot: cdRot ? parseInt(cdRot.value) : 0,
+            blau: cdBlau ? parseInt(cdBlau.value) : 0,
+            gruen: cdGruen ? parseInt(cdGruen.value) : 0,
+            gelb: cdGelb ? parseInt(cdGelb.value) : 0
+        },
+        payoutInterval: payoutVal ? parseInt(payoutVal.value) : 45,
+        cooldownResetTime: window.globalCooldownResetTime || 0
+    };
+    
+    fetch('/api/zones', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geoJsonData) })
+    .then(res => res.json()).then(data => console.log("Auto-Save erfolgreich!")).catch(err => err);
+}
+
 // 🔄 SICHERER RESET-BEFEHL
 window.resetAllCooldowns = function() {
     if(confirm("⚠️ Sollen die aktiven Cooldown-Sperren ALLER Spieler auf der Straße JETZT sofort beendet werden?")) {
@@ -747,18 +771,11 @@ window.fetchAndDrawTrails = function(btn) {
 
             for (let id in trails) {
                 let tData = trails[id];
-                // Zeichne die Spur nur, wenn der Spieler mehr als einen Punkt gelaufen ist
                 if (tData.path.length > 1) {
                     let teamColor = colors[tData.team] || '#ffffff';
-                    
                     let polyline = L.polyline(tData.path, {
-                        color: teamColor,
-                        weight: 4,          // Dicke der Linie
-                        opacity: 0.6,       // Leicht transparent
-                        dashArray: '5, 10'  // Macht die Linie gestrichelt (wie Fußspuren!)
+                        color: teamColor, weight: 4, opacity: 0.6, dashArray: '5, 10' 
                     });
-                    
-                    // Beim Drüberfahren mit der Maus zeigt es den Spielernamen an
                     polyline.bindTooltip(`<b>${tData.name}</b> (${tData.team})`);
                     trailsGroup.addLayer(polyline);
                 }
@@ -767,11 +784,9 @@ window.fetchAndDrawTrails = function(btn) {
             btn.innerText = "✅ Spuren gezeichnet!";
             btn.style.background = "#33ff33";
             
-            // Stellt sicher, dass die Checkbox an ist
             document.getElementById('show-trails-toggle').checked = true;
             toggleTrailsLayer();
 
-            // Setzt den Button nach 3 Sekunden zurück
             setTimeout(() => {
                 btn.innerText = oldText;
                 btn.style.background = "#444";
@@ -786,15 +801,12 @@ window.fetchAndDrawTrails = function(btn) {
 
 window.toggleTrailsLayer = function() {
     let isChecked = document.getElementById('show-trails-toggle').checked;
-    if (isChecked) {
-        map.addLayer(trailsGroup);
-    } else {
-        map.removeLayer(trailsGroup);
-    }
+    if (isChecked) map.addLayer(trailsGroup);
+    else map.removeLayer(trailsGroup);
 };
 
 window.resetTrails = function() {
-    if(confirm("Möchtest du wirklich alle aufgezeichneten GPS-Spuren unwiderruflich löschen? (Z.B. für ein neues Spiel)")) {
+    if(confirm("Möchtest du wirklich alle aufgezeichneten GPS-Spuren unwiderruflich löschen?")) {
         fetch('/api/trails/reset', { method: 'POST' })
         .then(res => res.json())
         .then(data => {
@@ -832,36 +844,23 @@ window.adminManageInventory = function(actionType) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            team: team,
-            player: player,
-            itemType: item,
-            amount: amount,
-            action: actionType
+            team: team, player: player, itemType: item, amount: amount, action: actionType
         })
     })
     .then(res => res.json())
     .then(data => {
-        if(data.success) {
-            alert(`✅ ${data.message}\nAktueller Bestand (${item}): ${data.inventory[item]}`);
-        } else {
-            alert(`❌ Fehler: ${data.error}`);
-        }
+        if(data.success) alert(`✅ ${data.message}\nAktueller Bestand (${item}): ${data.inventory[item]}`);
+        else alert(`❌ Fehler: ${data.error}`);
     });
 };
 
 window.adminResetAllInventories = function() {
-    if (confirm("ACHTUNG: Möchtest du wirklich ALLE Gegenstände aus den Rucksäcken ALLER Spieler löschen? Das kann nicht rückgängig gemacht werden!")) {
-        fetch('/api/inventory/reset-all', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        })
+    if (confirm("ACHTUNG: Möchtest du wirklich ALLE Gegenstände aus den Rucksäcken ALLER Spieler löschen?")) {
+        fetch('/api/inventory/reset-all', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
         .then(res => res.json())
         .then(data => {
-            if(data.success) {
-                alert("✅ " + data.message);
-            } else {
-                alert("❌ Fehler beim Zurücksetzen.");
-            }
+            if(data.success) alert("✅ " + data.message);
+            else alert("❌ Fehler beim Zurücksetzen.");
         });
     }
 };
@@ -884,11 +883,8 @@ window.manageCoins = function(action) {
     })
     .then(async res => {
         const contentType = res.headers.get("content-type");
-        if (contentType && contentType.includes("application/json")) {
-            return res.json();
-        } else {
-            throw new Error("Server hat nicht richtig geantwortet.");
-        }
+        if (contentType && contentType.includes("application/json")) return res.json();
+        else throw new Error("Server hat nicht richtig geantwortet.");
     })
     .then(data => {
         if(data.success) {

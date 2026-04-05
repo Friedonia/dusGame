@@ -14,6 +14,16 @@ if (urlParamsCheck.get('team') === 'undefined' || urlParamsCheck.get('team') ===
 }
 
 // ==========================================
+// 🎨 CSS INJECTION FÜR TRANSPARENTE LABELS
+// ==========================================
+if (!document.getElementById('dummy-css')) {
+    const style = document.createElement('style');
+    style.id = 'dummy-css';
+    style.innerHTML = `.dummy-transparent { background: transparent; border: none; box-shadow: none; }`;
+    document.head.appendChild(style);
+}
+
+// ==========================================
 // 1. TEAM- & SPIELER-ERKENNUNG & UI-AUFBAU
 // ==========================================
 const urlParams = new URLSearchParams(window.location.search);
@@ -318,6 +328,23 @@ function updateMap() {
                 if(f.properties.level === 2) op = 0.65;
                 if(f.properties.level === 3) op = 0.9;
                 return { color: f.properties.color, fillColor: f.properties.color, fillOpacity: op, interactive: true }; 
+            },
+            // NEU: HIER KOMMEN DIE ICONS AUF DIE KARTE DES SPIELERS!
+            onEachFeature: function (f, layer) {
+                if (f.properties.type === "zone") {
+                    let labels = [];
+                    if (f.properties.isKotH) labels.push("👑");
+                    if (f.properties.hqTeam) {
+                        let icons = { rot: '🔴', blau: '🔵', gruen: '🟢', gelb: '🟡' };
+                        labels.push(icons[f.properties.hqTeam] || "🏰 HQ");
+                    }
+                    if (labels.length > 0) {
+                        layer.bindTooltip(
+                            `<div style="background:rgba(0,0,0,0.8); padding:4px 8px; border-radius:6px; color:white; font-size:14px; border:1px solid #666; font-weight:bold; text-shadow: 0 0 5px black;">${labels.join(" ")}</div>`, 
+                            { permanent: true, direction: "center", className: 'dummy-transparent' }
+                        );
+                    }
+                }
             }
         }).addTo(zoneLayer);
 
@@ -526,6 +553,94 @@ window.useItemGlobal = function(type) {
         }
     });
 };
+
+// ==========================================
+// 📊 STATS & LEADERBOARD MODAL
+// ==========================================
+window.openStatsModal = function() {
+    let modal = document.getElementById('shop-modal'); // Wir recyclen einfach den Modal-Container!
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'shop-modal';
+        modal.style.cssText = `position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:9999; display:flex; justify-content:center; align-items:center; flex-direction:column; color:white; font-family:monospace;`;
+        document.body.appendChild(modal);
+    }
+    
+    modal.style.display = 'flex';
+    modal.innerHTML = `<h2>Lade Server-Akte... ⏳</h2>`;
+
+    fetch(`/api/stats?team=${myTeam}&player=${myPlayerNum}`)
+    .then(res => res.json())
+    .then(data => {
+        
+        // Rangliste sortieren (1. Zonen, 2. Coins)
+        let teams = ['rot', 'blau', 'gruen', 'gelb'];
+        teams.sort((a, b) => {
+            if (data.leaderboard[b].zones !== data.leaderboard[a].zones) {
+                return data.leaderboard[b].zones - data.leaderboard[a].zones;
+            }
+            return data.leaderboard[b].coins - data.leaderboard[a].coins;
+        });
+
+        let lbHtml = "";
+        let rank = 1;
+        const teamNames = { rot: 'ROT', blau: 'BLAU', gruen: 'GRÜN', gelb: 'GELB' };
+
+        teams.forEach(t => {
+            let isMe = t === myTeam;
+            let bg = isMe ? '#333' : '#111';
+            let border = isMe ? `border-left: 4px solid ${teamColors[t]};` : `border-left: 4px solid #444;`;
+            
+            // Gefallene Teams markieren
+            let statusText = `Cooldown: ${data.teamCooldowns[t] || 0} Min`;
+            if (globalMapData && globalMapData.gameSettings && globalMapData.gameSettings.fallenTeams && globalMapData.gameSettings.fallenTeams[t]) {
+                statusText = `<span style="color:#ff4444; font-weight:bold;">☠️ HQ ZERSTÖRT</span>`;
+            }
+
+            lbHtml += `
+                <div style="display:flex; justify-content:space-between; background:${bg}; padding:10px; margin-bottom:5px; border-radius:5px; ${border}">
+                    <div>
+                        <strong style="color:${teamColors[t]}">${rank}. Team ${teamNames[t]}</strong><br>
+                        <span style="font-size:11px; color:#aaa;">${statusText}</span>
+                    </div>
+                    <div style="text-align:right;">
+                        <strong>${data.leaderboard[t].zones} 🎯</strong><br>
+                        <span style="font-size:12px; color:#ffcc00;">${data.leaderboard[t].coins} 💰</span>
+                    </div>
+                </div>
+            `;
+            rank++;
+        });
+
+        modal.innerHTML = `
+            <div style="background:#111; padding:15px; border:2px solid ${teamColors[myTeam]}; border-radius:10px; width:95%; max-width:400px; max-height:85vh; overflow-y:auto;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                    <h2 style="margin:0; font-size:18px;">📊 LEADERBOARD</h2>
+                    <button onclick="document.getElementById('shop-modal').style.display='none'" style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px; font-weight:bold;">X</button>
+                </div>
+                
+                <h3 style="color:#aaa; border-bottom:1px solid #444; padding-bottom:5px; font-size:14px;">Globale Rangliste:</h3>
+                ${lbHtml}
+
+                <h3 style="color:#aaa; border-bottom:1px solid #444; padding-bottom:5px; font-size:14px; margin-top:20px;">🕵️ Deine Agenten-Akte:</h3>
+                <div style="background:#222; padding:15px; border-radius:5px; display:flex; justify-content:space-around; text-align:center;">
+                    <div>
+                        <div style="font-size:26px; color:#00ffcc; font-weight:bold;">${data.personal.hacks}</div>
+                        <div style="font-size:11px; color:#aaa; text-transform:uppercase;">Zonen gehackt</div>
+                    </div>
+                    <div>
+                        <div style="font-size:26px; color:#ff8800; font-weight:bold;">${data.personal.distance}</div>
+                        <div style="font-size:11px; color:#aaa; text-transform:uppercase;">km Gelaufen</div>
+                    </div>
+                </div>
+                <div style="text-align:center; margin-top:15px; font-size:11px; color:#555;">
+                    Die Statistik wird live über das Server-Netzwerk aktualisiert.
+                </div>
+            </div>
+        `;
+    });
+};
+
 // ==========================================
 // 📍 GPS LOGIK 
 // ==========================================

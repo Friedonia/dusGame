@@ -67,9 +67,10 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#808080",
+        "color": "#3366ff",
         "type": "zone",
-        "code": "EH#6943#26"
+        "code": "EH#6943#26",
+        "level": 1
       },
       "geometry": {
         "type": "Polygon",
@@ -1165,13 +1166,12 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#ff3333",
+        "color": "#808080",
         "type": "zone",
         "code": "EN#0072#14",
         "locked": false,
-        "level": 1,
-        "traps": [],
-        "buffs": []
+        "level": 0,
+        "hqTeam": ""
       },
       "geometry": {
         "type": "Polygon",
@@ -1211,7 +1211,9 @@
         "color": "#3366ff",
         "type": "zone",
         "code": "MR#2559#29",
-        "level": 1
+        "level": 1,
+        "isKotH": true,
+        "hqTeam": ""
       },
       "geometry": {
         "type": "Polygon",
@@ -1308,10 +1310,12 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#808080",
+        "color": "#3366ff",
         "type": "zone",
         "code": "EN#7240#18",
-        "level": 1
+        "level": 1,
+        "isKotH": false,
+        "hqTeam": ""
       },
       "geometry": {
         "type": "Polygon",
@@ -1657,11 +1661,12 @@
     {
       "type": "Feature",
       "properties": {
-        "color": "#ff3333",
+        "color": "#808080",
         "type": "zone",
         "code": "HN#3531#19",
-        "level": 1,
-        "locked": false
+        "level": 0,
+        "locked": false,
+        "hqTeam": ""
       },
       "geometry": {
         "type": "Polygon",
@@ -2730,12 +2735,15 @@
       "timestamp": 1775339942625
     },
     "teamCooldowns": {
-      "rot": 6,
+      "rot": 5,
       "blau": 5,
-      "gruen": 0,
+      "gruen": 5,
       "gelb": 5
     },
     "payoutInterval": 42,
-    "cooldownResetTime": 1775242288194
+    "cooldownResetTime": 1775416197806,
+    "fallenTeams": {
+      "rot": false
+    }
   }
 }
