@@ -609,7 +609,6 @@ app.post('/api/location', (req, res) => {
     let { id, lat, lng, team, name } = req.body;
     const now = Date.now();
 
-    // 🧠 GPS KALMAN-LITE & AUSREISSER-FILTER
     if (playerLocations[id]) {
         let lastLoc = playerLocations[id];
         let timeDiffSec = (now - lastLoc.lastUpdate) / 1000;
