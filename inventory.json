@@ -1,1 +1,10 @@
-{}
+{
+  "blau_1": {
+    "trap": 1,
+    "buff": 0,
+    "revive": 0,
+    "emp": 0,
+    "defuse": 0,
+    "pickpocket": 0
+  }
+}

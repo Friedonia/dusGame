@@ -28,9 +28,6 @@ function generateSpecialCode(number = 0) {
     return `${char1}${char2}#${digitStr}#${checksum}`;
 }
 
-// ==========================================
-// 🧠 RÄUMLICHE ERKENNUNG (Point in Polygon)
-// ==========================================
 function isPointInPolygon(latlng, polygon) {
     let latlngs = polygon.getLatLngs();
     while (latlngs.length > 0 && Array.isArray(latlngs[0])) latlngs = latlngs[0];
@@ -159,7 +156,6 @@ function applyZoneStyle(layer) {
         layer.setStyle({ color: props.color, fillColor: props.color, opacity: 1, fillOpacity: op, dashArray: '' });
     }
 
-    // 👑 🏰 HAUPTQUARTIER & KOTH TOOLTIPS (Markierungen)
     if (layer.getTooltip()) layer.unbindTooltip();
     let labels = [];
     if (props.isKotH) labels.push("👑");
@@ -202,7 +198,7 @@ function applyAllLegendFilters() {
 }
 
 // ==========================================
-// 🛠 POPUP GENERATOREN & HQ LOGIK
+// 🛠 POPUP GENERATOREN
 // ==========================================
 function generateZonePopupContent(props) {
     let lvl = props.level || 1;
@@ -221,7 +217,6 @@ function generateZonePopupContent(props) {
                     ? `<button onclick="removeZoneItem('${zCode}')" style="background:#ff4444; color:white; border:none; border-radius:3px; cursor:pointer; padding:4px; font-size:11px; width:100%; margin-top:5px;">🗑️ Items & EMP löschen</button>` 
                     : "";
 
-    // 👑 KING OF THE HILL & HQ DROPDOWN
     let kothHtml = `
         <label style="display:block; margin-top:10px; cursor:pointer; background:#222; padding:5px; border-radius:4px; border:1px solid #444;">
             <input type="checkbox" id="koth-${zCode}" onchange="updateZoneSpecial('${zCode}')" ${props.isKotH ? 'checked' : ''}>
@@ -322,9 +317,7 @@ window.toggleZoneLock = function(code) {
             props.locked = !props.locked;
             applyZoneStyle(layer);
             
-            if (layer.getPopup()) {
-                layer.setPopupContent(generateZonePopupContent(props));
-            }
+            if (layer.getPopup()) layer.setPopupContent(generateZonePopupContent(props));
             saveZones();
         }
     });
@@ -397,9 +390,7 @@ function makeEditable(layer) {
         layer.bindPopup(generateZonePopupContent(layer.feature.properties)).openPopup(e.latlng);
     });
 
-    layer.on('popupclose', function() {
-        layer.unbindPopup();
-    });
+    layer.on('popupclose', function() { layer.unbindPopup(); });
 }
 
 // ==========================================
@@ -564,14 +555,18 @@ function loadZonesFromServer() {
     }).catch(err => console.log("Live-Update fehlgeschlagen:", err));
 }
 
-setInterval(loadZonesFromServer, 10000); 
 loadZonesFromServer();
 
 // ==========================================
-// 📍 LIVE SPIELER STANDORTE
+// 📍 LIVE SPIELER STANDORTE (Optimiert)
 // ==========================================
+let adminLocVersion = 0;
 function updateLiveLocations() {
-    fetch('/api/location?t=' + new Date().getTime()).then(res => res.json()).then(players => {
+    fetch('/api/location?v=' + adminLocVersion).then(res => res.json()).then(response => {
+        if (response.unchanged) return;
+        adminLocVersion = response.version;
+        let players = response.data;
+        
         playerGroup.clearLayers();
         const listDiv = document.getElementById('player-list');
         if (Object.keys(players).length === 0) { listDiv.innerHTML = '<span style="color:#aaa;">Keine Spieler online</span>'; return; }
@@ -584,8 +579,6 @@ function updateLiveLocations() {
         }
     }).catch(err => err);
 }
-setInterval(updateLiveLocations, 5000);
-
 
 // ==========================================
 // ⏳ LIVE SPIELER-COOLDOWNS IM ADMIN-PANEL 
@@ -616,7 +609,6 @@ function updateAdminCooldowns() {
             for (let team in data.states) {
                 let cdInput = document.getElementById('cd-' + team);
                 
-                // 🚨 FIX FÜR NaN ERROR:
                 let baseDurationMins = 0;
                 if (cdInput && cdInput.value !== "") {
                     baseDurationMins = parseInt(cdInput.value) || 0;
@@ -628,7 +620,6 @@ function updateAdminCooldowns() {
                 let icon = isOpen ? '▼' : '▶';
                 let displayStyle = isOpen ? 'block' : 'none';
 
-                // 🚨 NEU: Der Rettungsbutton für HQ-verlust!
                 let isFallen = data.fallenTeams && data.fallenTeams[team];
                 let fallenWarning = isFallen ? `<button onclick="adminReviveTeam('${team}'); event.stopPropagation();" style="background:#ff4444; color:white; border:1px solid white; border-radius:3px; padding:2px 6px; font-size:11px; cursor:pointer; margin-left:10px; box-shadow: 0 0 5px red;">☠️ HQ ZERSTÖRT (Klick = Retten)</button>` : "";
 
@@ -653,7 +644,7 @@ function updateAdminCooldowns() {
                     } else {
                         let leftSecs = Math.ceil(diff / 1000);
                         if (isNaN(leftSecs)) {
-                            statusText = `<span style="color: #aaa;">Bereit</span>`; // Sicherheitsnetz
+                            statusText = `<span style="color: #aaa;">Bereit</span>`; 
                         } else {
                             let m = Math.floor(leftSecs / 60);
                             let s = leftSecs % 60;
@@ -676,7 +667,6 @@ if (!window.adminCooldownInterval) {
     window.adminCooldownInterval = setInterval(updateAdminCooldowns, 1000);
 }
 
-// Die Funktion für den neuen HQ-Rettungs-Button
 window.adminReviveTeam = function(team) {
     if(confirm(`Möchtest du Team ${team.toUpperCase()} aus dem 'Free Real Estate' Modus befreien?`)) {
         fetch('/api/admin/revive-team', {
@@ -730,7 +720,6 @@ function saveZones() {
     .then(res => res.json()).then(data => console.log("Auto-Save erfolgreich!")).catch(err => err);
 }
 
-// 🔄 SICHERER RESET-BEFEHL
 window.resetAllCooldowns = function() {
     if(confirm("⚠️ Sollen die aktiven Cooldown-Sperren ALLER Spieler auf der Straße JETZT sofort beendet werden?")) {
         fetch('/api/reset-cooldowns', { method: 'POST' })
@@ -817,12 +806,16 @@ window.resetTrails = function() {
 };
 
 // ==========================================
-// 💸 WIRTSCHAFT MANUELL VERWALTEN & ANZEIGEN
+// 💸 WIRTSCHAFT MANUELL VERWALTEN (Optimiert)
 // ==========================================
+let adminCoinsVersion = 0;
 function updateAdminCoins() {
-    fetch('/api/coins?t=' + new Date().getTime())
+    fetch('/api/coins?v=' + adminCoinsVersion)
         .then(res => res.json())
-        .then(coins => {
+        .then(response => {
+            if (response.unchanged) return;
+            adminCoinsVersion = response.version;
+            let coins = response.data;
             if(document.getElementById('admin-coins-rot')) document.getElementById('admin-coins-rot').innerText = coins.rot || 0;
             if(document.getElementById('admin-coins-blau')) document.getElementById('admin-coins-blau').innerText = coins.blau || 0;
             if(document.getElementById('admin-coins-gruen')) document.getElementById('admin-coins-gruen').innerText = coins.gruen || 0;
@@ -831,7 +824,6 @@ function updateAdminCoins() {
         .catch(err => console.log("Fehler beim Laden der Coins:", err));
 }
 
-setInterval(updateAdminCoins, 5000);
 updateAdminCoins(); 
 
 window.adminManageInventory = function(actionType) {
@@ -904,3 +896,142 @@ window.adminResetStats = function() {
         .then(data => alert(data.message));
     }
 };
+
+// ==========================================
+// 🔌 SOCKET.IO - ADMIN ECHTZEIT VERBINDUNG
+// ==========================================
+const socket = io(); 
+
+// Initialer Aufruf beim Laden
+loadZonesFromServer();
+updateLiveLocations();
+updateAdminCoins();
+fetchAdminCooldowns(); // Einmalig am Start
+
+// Server meldet Änderungen -> Wir laden selektiv nach!
+socket.on('update_map', () => loadZonesFromServer());
+socket.on('update_locations', () => updateLiveLocations());
+socket.on('update_coins', () => updateAdminCoins());
+socket.on('update_stats', () => fetchAdminCooldowns()); // Cooldowns & Stats haben sich geändert
+
+window.adminPushTicket = function() {
+    let msg = prompt("Nachricht an die Agenten:", "MISSION ERFÜLLT! 🗼\nZeigt diesen persönlichen QR-Code am Einlass des Rheinturms vor.");
+    
+    if (msg) {
+        if (confirm("⚠️ ACHTUNG: Soll der digitale Tresor JETZT geöffnet und die Tickets auf allen Handys angezeigt werden?")) {
+            fetch('/api/admin/push-ticket', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: msg })
+            })
+            .then(res => res.json())
+            .then(data => alert("✅ " + data.message))
+            .catch(err => alert("❌ Fehler: " + err));
+        }
+    }
+};
+
+socket.on('show_ticket', (data) => {
+    // Falls noch ein altes Overlay offen ist
+    let existingTicket = document.getElementById('final-ticket-overlay');
+    if (existingTicket) existingTicket.remove();
+
+    // Wir fragen den Tresor über die sichere Route ab!
+    let secureTicketUrl = `/api/ticket/${myTeam}/${myPlayerNum}`;
+
+    let overlay = document.createElement('div');
+    overlay.id = 'final-ticket-overlay';
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+        background: rgba(0, 0, 0, 0.95); z-index: 99999;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        color: #00ffcc; font-family: monospace; text-align: center; padding: 20px;
+        box-sizing: border-box; backdrop-filter: blur(5px);
+    `;
+
+    overlay.innerHTML = `
+        <h1 style="color: #ffcc00; text-transform: uppercase; text-shadow: 0 0 10px #ffcc00; animation: pulse 2s infinite;">
+            🎉 EVAKUIERUNG ERFOLGREICH 🎉
+        </h1>
+        <p style="font-size: 16px; color: white; margin-bottom: 20px; white-space: pre-wrap;">${data.message}</p>
+        
+        <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 0 20px ${teamColors[myTeam]};">
+            <img src="${secureTicketUrl}" alt="Dein persönliches Ticket" style="width: 250px; height: 250px; display: block; object-fit: contain;">
+        </div>
+        
+        <p style="margin-top: 15px; color: #888; font-size: 14px;">AGENT-ID: <strong style="color:${teamColors[myTeam]}">${myTeam.toUpperCase()} ${myPlayerNum}</strong></p>
+        <p style="margin-top: 5px; color: #888; font-size: 12px;">Bitte Helligkeit des Displays erhöhen beim Scannen!</p>
+        
+        <button onclick="document.getElementById('final-ticket-overlay').remove()" 
+                style="margin-top: 30px; background: #333; color: white; border: 1px solid #666; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
+            Ticket schließen
+        </button>
+    `;
+
+    document.body.appendChild(overlay);
+    
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]);
+});
+
+// ==========================================
+// ⏳ LOKALES COOLDOWN TICKING (Ressourcen-schonend!)
+// ==========================================
+let localAdminCooldownData = null;
+
+// Die Fetch-Funktion fragt nur noch das Netzwerk, wenn 'update_stats' triggert!
+function fetchAdminCooldowns() {
+    fetch('/api/admin/cooldown-states?t=' + new Date().getTime())
+        .then(res => res.json())
+        .then(data => {
+            localAdminCooldownData = data; 
+            renderAdminCooldowns(); // Sofort einmal neu zeichnen
+        }).catch(err => console.log(err));
+}
+
+// Render-Funktion zeichnet nur das HTML aus der lokalen Variable neu (Ticking-Effekt für die UI)
+function renderAdminCooldowns() {
+    if (!localAdminCooldownData) return;
+    const data = localAdminCooldownData;
+    const container = document.getElementById('cooldown-live-view');
+    if (!container) return; 
+
+    const now = Date.now();
+    const colors = { rot: '#ff3333', blau: '#3366ff', gruen: '#33ff33', gelb: '#ffcc00' };
+
+    let htmlStr = "";
+    for (let team in data.states) {
+        let cdInput = document.getElementById('cd-' + team);
+        let baseDurationMins = (cdInput && cdInput.value !== "") ? parseInt(cdInput.value) : (data.durations[team] || 0);
+        let isOpen = window.adminAccordionState[team];
+        
+        let isFallen = data.fallenTeams && data.fallenTeams[team];
+        let fallenWarning = isFallen ? `<button onclick="adminReviveTeam('${team}'); event.stopPropagation();" style="background:#ff4444; color:white; border:1px solid white; border-radius:3px; padding:2px 6px; font-size:11px; cursor:pointer; margin-left:10px;">☠️ RETTEN</button>` : "";
+
+        htmlStr += `<div style="margin-bottom: 5px; border: 1px solid #444; border-radius: 4px; overflow: hidden;">
+            <div onclick="toggleTeamAccordion('${team}')" style="background: #333; padding: 8px; cursor: pointer; display: flex; justify-content: space-between; border-left: 4px solid ${colors[team] || '#aaa'}; align-items:center;">
+                <strong style="color:white;">Team ${team.toUpperCase()} ${fallenWarning}</strong>
+                <span style="color:#aaa; font-size: 12px;">(${baseDurationMins} Min) <span id="cd-icon-${team}">${isOpen ? '▼' : '▶'}</span></span>
+            </div>
+            <div id="cd-details-${team}" style="display: ${isOpen ? 'block' : 'none'}; padding: 10px; background: #222;">`;
+
+        for (let playerNum in data.states[team]) {
+            let lastScan = data.states[team][playerNum].lastScan || 0; 
+            let effectiveMs = baseDurationMins * 60000;
+            let diff = effectiveMs - (now - lastScan);
+            
+            let statusText = (lastScan === 0 || diff <= 0 || effectiveMs <= 0) ? `<span style="color: #00ffcc; font-weight:bold;">Bereit</span>` : (() => {
+                let leftSecs = Math.ceil(diff / 1000);
+                return isNaN(leftSecs) ? `<span style="color: #aaa;">Bereit</span>` : `<span style="color: #ff8800; font-weight:bold;">⏳ ${Math.floor(leftSecs / 60)}:${leftSecs % 60 < 10 ? '0':''}${leftSecs % 60}</span>`;
+            })();
+            
+            htmlStr += `<div style="display: flex; justify-content: space-between; margin-bottom: 4px; border-bottom: 1px solid #333; padding-bottom: 2px;">
+                            <span style="color:#ddd;">Spieler ${playerNum}:</span> ${statusText}
+                        </div>`;
+        }
+        htmlStr += `</div></div>`;
+    }
+    container.innerHTML = htmlStr;
+}
+
+// Tickt nur noch lokal das HTML weiter runter, NULL Traffic!
+if (!window.adminCooldownInterval) window.adminCooldownInterval = setInterval(renderAdminCooldowns, 1000);

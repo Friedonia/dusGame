@@ -1,0 +1,10 @@
+Im Prinzip soll dies hier eine Möglichkeit sein, 
+Spieler dahin zu leiten, an einen Ort, 
+und wenn man dies gemacht hat, damit diese Spieler nicht aus der 
+Immersion des Spiels rausgeworfen werden und ein Ticket für das nächste eines raussuchen müssen, 
+kann der Admin dies jedem auf Spiel senden. 
+
+Makiert werden die Tickets nach diesem format
+Team + Spieler Nummer + .jpeg
+Bsp für Spieler 1 von team blau 
+b1.jpeg

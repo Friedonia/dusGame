@@ -39,7 +39,6 @@ if (urlPlayer && ['1', '2', '3'].includes(urlPlayer)) {
     localStorage.setItem('playerNum', '1');
 }
 
-// WICHTIG: Teamname immer als Kleinbuchstaben erzwingen!
 const myTeam = String(localStorage.getItem('team') || 'rot').toLowerCase(); 
 let myPlayerNum = localStorage.getItem('playerNum') || '1'; 
 const playerId = `${myTeam}_Player${myPlayerNum}`;
@@ -81,9 +80,6 @@ function setupDedicatedCooldownUI() {
 }
 if(localStorage.getItem('team')) setupDedicatedCooldownUI();
 
-// ==========================================
-// 🛠 DEBUG / TROUBLESHOOTING UI 
-// ==========================================
 function setupPlayerSwitcher() {
     document.querySelectorAll('#debug-player-switch').forEach(el => el.remove());
 
@@ -130,9 +126,8 @@ window.toggleHud = function() {
     }
 }
 
-
 // ==========================================
-// 💬 CHAT-SYSTEM (Spieler) - MIT VERSION POLLING
+// 💬 CHAT-SYSTEM
 // ==========================================
 let chatOpen = false;
 window.toggleChat = function() {
@@ -162,23 +157,18 @@ window.sendChat = function() {
 }
 
 let lastPlayerMsgCount = 0;
-let currentChatVersion = 0; // NEU: Merkt sich den Chat-Stand!
+let currentChatVersion = 0; 
 
 function loadPlayerChat(forceScroll = false) {
     fetch('/api/chat?v=' + currentChatVersion)
         .then(res => res.json())
         .then(response => {
-            // SERVER SAGT: NICHTS NEUES! -> Wir sparen Traffic und brechen ab.
             if (response.unchanged) return; 
 
-            // SERVER SAGT: NEUE NACHRICHTEN DA!
             currentChatVersion = response.version;
             const allMsgs = response.messages;
-
-            // Nur Nachrichten für mein Team oder globale ("all") filtern
             const teamMsgs = allMsgs.filter(m => m.team === myTeam || m.team === 'all');
             
-            // Notification-Badge anzeigen, wenn Chat zu ist und neue Nachrichten kommen
             if (!chatOpen && teamMsgs.length > lastPlayerMsgCount && lastPlayerMsgCount !== 0) {
                 let badge = document.getElementById('chat-badge');
                 if(badge) badge.style.display = 'block';
@@ -188,12 +178,10 @@ function loadPlayerChat(forceScroll = false) {
             const chatBox = document.getElementById('chat-messages');
             if(!chatBox) return;
             
-            chatBox.innerHTML = ''; // Leeren
+            chatBox.innerHTML = ''; 
 
             teamMsgs.forEach(m => {
                 const msgDiv = document.createElement('div');
-                
-                // Design für Admin vs. Ich vs. Teamkollege
                 if (m.type === 'admin') {
                     msgDiv.className = 'msg admin-msg';
                     msgDiv.style.cssText = "background: #005a4e; color: white; padding: 8px; border-radius: 5px; margin-bottom: 5px; border-left: 3px solid #00ffcc;";
@@ -210,17 +198,14 @@ function loadPlayerChat(forceScroll = false) {
                 chatBox.appendChild(msgDiv);
             });
 
-            // Automatisch nach unten scrollen
             if (forceScroll || chatBox.scrollTop + chatBox.clientHeight >= chatBox.scrollHeight - 50) {
                 chatBox.scrollTop = chatBox.scrollHeight;
             }
         }).catch(err => console.log("Chat offline."));
 }
 
-setInterval(() => loadPlayerChat(false), 2000);
 loadPlayerChat(true);
 
-// KARTE LADEN
 var map = L.map('map', { zoomControl: false }).setView([51.2277, 6.7735], 13.2);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
 
@@ -229,23 +214,17 @@ var playerLayer = L.layerGroup().addTo(map);
 var nfcIcon = L.divIcon({ className: 'custom-nfc-marker', html: '<div style="background-color: #ff8800; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 8px #ff8800;"></div>', iconSize: [20, 20], iconAnchor: [10, 10] });
 
 // ==========================================
-// 🔄 MAP UPDATE LOGIK (MIT VERSION POLLING!)
+// 🔄 MAP UPDATE LOGIK
 // ==========================================
 let lastAnnouncementTime = 0; 
 let timerInterval = null;
 let globalCooldownMins = 0; 
-let currentMapVersion = 0; // Speichert den Versions-Stand!
+let currentMapVersion = 0; 
 
 function updateMap() {
-    // Schickt die aktuelle Version ans Backend
     fetch('/api/zones?v=' + currentMapVersion).then(res => res.json()).then(response => {
-        
-        // SERVER SAGT: NICHTS NEUES! Wir brechen hier sofort ab.
-        if (response.unchanged) {
-            return; 
-        }
+        if (response.unchanged) return; 
 
-        // SERVER SAGT: NEUE DATEN!
         currentMapVersion = response.version;
         let data = response.data;
         
@@ -288,7 +267,6 @@ function updateMap() {
             document.getElementById('coin-display').style.display = 'block';
         }
 
-        // RESET-SIGNAL PRÜFEN
         if (data.gameSettings && data.gameSettings.cooldownResetTime) {
             let lastScan = parseInt(localStorage.getItem(`lastScanTime_${myTeam}_${myPlayerNum}`) || localStorage.getItem(`lastScanTime_${myPlayerNum}`)) || 0;
             if (data.gameSettings.cooldownResetTime > lastScan) {
@@ -299,7 +277,6 @@ function updateMap() {
             }
         }
 
-        // COOLDOWN ZEIT LADEN
         if (data.gameSettings && data.gameSettings.teamCooldowns) {
             globalCooldownMins = parseInt(data.gameSettings.teamCooldowns[myTeam]) || 0;
         } else {
@@ -329,7 +306,6 @@ function updateMap() {
                 if(f.properties.level === 3) op = 0.9;
                 return { color: f.properties.color, fillColor: f.properties.color, fillOpacity: op, interactive: true }; 
             },
-            // NEU: HIER KOMMEN DIE ICONS AUF DIE KARTE DES SPIELERS!
             onEachFeature: function (f, layer) {
                 if (f.properties.type === "zone") {
                     let labels = [];
@@ -354,33 +330,15 @@ function updateMap() {
 }
 
 // ==========================================
-// ⏳ COOLDOWN CHECK & FREIKAUF
+// ⏳ COOLDOWN CHECK
 // ==========================================
 window.isCooldownActive = false;
-
-window.buyCooldownReduction = function() {
-    if (confirm("Möchtest du 50 Münzen ausgeben, um den globalen Cooldown für DEIN GANZES TEAM um 2 Minuten zu senken?")) {
-        fetch('/api/reduce-cooldown', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ team: myTeam })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.error) alert(data.error);
-            else alert("⚡ Cooldown für Team erfolgreich reduziert!");
-            // Die neue Zeit kommt beim nächsten 3-Sekunden Update automatisch vom Server!
-        });
-    }
-};
 
 setInterval(() => {
     let pNum = myPlayerNum; 
     let tName = myTeam; 
     
     let lastScan = parseInt(localStorage.getItem(`lastScanTime_${tName}_${pNum}`)) || 0;
-    
-    // Einfach nur noch der globale Wert vom Server!
     let effectiveCooldownMins = globalCooldownMins || 0; 
 
     let cdBox = document.getElementById('dedicated-cooldown-display');
@@ -428,7 +386,6 @@ setInterval(() => {
         }
     } else {
         window.isCooldownActive = false;
-
         if(cdBox) {
             if (globalCooldownMins === 0) {
                 cdBox.style.borderColor = "#444";
@@ -448,25 +405,32 @@ setInterval(() => {
 }, 1000);
 
 // ==========================================
-// 📍 LIVE SPIELER STANDORTE
+// 📍 LIVE SPIELER STANDORTE (Optimiert)
 // ==========================================
+let currentLocVersion = 0;
 function fetchPlayers() {
-    fetch('/api/location').then(res => res.json()).then(players => {
-        playerLayer.clearLayers();
-        for (let id in players) {
-            const p = players[id];
-            if(id === playerId) continue; 
-            let playerColor = p.team === 'rot' ? '#ff3333' : (p.team === 'blau' ? '#3366ff' : (p.team === 'gruen' ? '#33ff33' : '#ffcc00'));
-            L.circleMarker([p.lat, p.lng], { radius: 6, fillColor: playerColor, color: "#ffffff", weight: 2, fillOpacity: 1 }).addTo(playerLayer);
-        }
-    }).catch(err => err);
+    fetch('/api/location?v=' + currentLocVersion)
+        .then(res => res.json())
+        .then(response => {
+            if (response.unchanged) return;
+            currentLocVersion = response.version;
+            let players = response.data;
+            
+            playerLayer.clearLayers();
+            for (let id in players) {
+                const p = players[id];
+                if(id === playerId) continue; 
+                let playerColor = p.team === 'rot' ? '#ff3333' : (p.team === 'blau' ? '#3366ff' : (p.team === 'gruen' ? '#33ff33' : '#ffcc00'));
+                L.circleMarker([p.lat, p.lng], { radius: 6, fillColor: playerColor, color: "#ffffff", weight: 2, fillOpacity: 1 }).addTo(playerLayer);
+            }
+        }).catch(err => err);
 }
 
-// LÄDT DIE KARTE ALLE 3 SEKUNDEN (Mit Version-Check fast ohne Traffic!)
-setInterval(updateMap, 3000); 
+
 updateMap();
+
 // ==========================================
-// 🎒 RUCKSACK & SHOP MODAL
+// 🎒 RUCKSACK & SHOP MODAL (Optimiert)
 // ==========================================
 window.openShopModal = function() {
     let modal = document.getElementById('shop-modal');
@@ -480,13 +444,15 @@ window.openShopModal = function() {
     modal.style.display = 'flex';
     modal.innerHTML = `<h2>Lade Rucksack... ⏳</h2>`;
 
+    // v=0 erzwingt hier einen kompletten Fetch, da der User aktiv das Modal öffnet
     Promise.all([
-        fetch(`/api/inventory?team=${myTeam}&player=${myPlayerNum}`).then(res => res.json()),
-        fetch('/api/coins').then(res => res.json())
-    ]).then(([inv, wallets]) => {
+        fetch(`/api/inventory?v=0&team=${myTeam}&player=${myPlayerNum}`).then(res => res.json()),
+        fetch('/api/coins?v=0').then(res => res.json())
+    ]).then(([invRes, walletsRes]) => {
+        let inv = invRes.data || invRes; 
+        let wallets = walletsRes.data || walletsRes;
         let teamCoins = wallets[myTeam] || 0;
         
-        // Helfer-Funktion für das Zeichnen der Shop-Reihen
         const drawItem = (id, name, desc, price, color, count) => `
             <div style="display:flex; justify-content:space-between; background:#222; padding:8px; margin-bottom:8px; border-radius:5px; border-left:3px solid ${color};">
                 <div>
@@ -512,9 +478,8 @@ window.openShopModal = function() {
                 
                 ${drawItem('trap', '🪤 Falle (Lokal)', 'Bestraft Scanner (+1 Min).', 30, '#ff8800', inv.trap)}
                 ${drawItem('buff', '⚡ Buff (Lokal)', 'Belohnt dein Team (-1 Min).', 30, '#00ffcc', inv.buff)}
-                ${drawItem('drohne', '🚁 Drohne (Lokal)', 'Zählt Fallen auf fremder Zone.', 10, '#0088ff', inv.drohne)}
                 ${drawItem('entschaerfung', '✂️ Entschärfer (Lokal)', 'Löscht alle Fallen der Zone.', 40, '#ff00ff', inv.entschaerfung)}
-                ${drawItem('taschendieb', '🕵️‍♂️ Dieb (Lokal)', 'Klaut 15 Coins an Feindes-Zone.', 30, '#8a2be2', inv.taschendieb)}
+                ${drawItem('taschendieb', '🕵️‍♂️ Dieb (Lokal)', 'Klaut 15 Coins an Feindes-Zone.', 30, '#8a2be2', inv.pickpocket)}
                 ${drawItem('emp', '⚡ EMP-Granate (Lokal)', 'Sperrt Zone für 15 Minuten.', 80, '#ff3333', inv.emp)}
                 ${drawItem('revive', '🚑 Revive (Global)', 'Löscht Team-Cooldown.', 200, '#ff4444', inv.revive)}
 
@@ -523,6 +488,7 @@ window.openShopModal = function() {
         `;
     });
 };
+
 window.buyItemGlobal = function(type) {
     fetch('/api/shop/buy', {
         method: 'POST',
@@ -532,7 +498,7 @@ window.buyItemGlobal = function(type) {
     .then(res => res.json())
     .then(data => {
         if (data.error) alert("❌ " + data.error);
-        else openShopModal(); // Fenster einfach neu laden für aktuelle Zahlen
+        else openShopModal(); 
     });
 };
 
@@ -548,16 +514,16 @@ window.useItemGlobal = function(type) {
         if (data.error) alert("❌ " + data.error);
         else {
             alert("✅ " + data.message);
-            openShopModal(); // Zahlen updaten
+            openShopModal(); 
         }
     });
 };
 
 // ==========================================
-// 📊 STATS & LEADERBOARD MODAL
+// 📊 STATS MODAL (Optimiert)
 // ==========================================
 window.openStatsModal = function() {
-    let modal = document.getElementById('shop-modal'); // Wir recyclen einfach den Modal-Container!
+    let modal = document.getElementById('shop-modal'); 
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'shop-modal';
@@ -568,11 +534,10 @@ window.openStatsModal = function() {
     modal.style.display = 'flex';
     modal.innerHTML = `<h2>Lade Server-Akte... ⏳</h2>`;
 
-    fetch(`/api/stats?team=${myTeam}&player=${myPlayerNum}`)
+    fetch(`/api/stats?v=0&team=${myTeam}&player=${myPlayerNum}`)
     .then(res => res.json())
     .then(data => {
         
-        // Rangliste sortieren (1. Zonen, 2. Coins)
         let teams = ['rot', 'blau', 'gruen', 'gelb'];
         teams.sort((a, b) => {
             if (data.leaderboard[b].zones !== data.leaderboard[a].zones) {
@@ -590,7 +555,6 @@ window.openStatsModal = function() {
             let bg = isMe ? '#333' : '#111';
             let border = isMe ? `border-left: 4px solid ${teamColors[t]};` : `border-left: 4px solid #444;`;
             
-            // Gefallene Teams markieren
             let statusText = `Cooldown: ${data.teamCooldowns[t] || 0} Min`;
             if (globalMapData && globalMapData.gameSettings && globalMapData.gameSettings.fallenTeams && globalMapData.gameSettings.fallenTeams[t]) {
                 statusText = `<span style="color:#ff4444; font-weight:bold;">☠️ HQ ZERSTÖRT</span>`;
@@ -632,9 +596,6 @@ window.openStatsModal = function() {
                         <div style="font-size:11px; color:#aaa; text-transform:uppercase;">km Gelaufen</div>
                     </div>
                 </div>
-                <div style="text-align:center; margin-top:15px; font-size:11px; color:#555;">
-                    Die Statistik wird live über das Server-Netzwerk aktualisiert.
-                </div>
             </div>
         `;
     });
@@ -673,14 +634,20 @@ window.submitManualCode = function() {
     window.location.href = `/scan.html?code=${encodeURIComponent(rawCode)}&player=${myPlayerNum}`;
 }
 
+let currentCoinsVersion = 0;
 function fetchCoins() {
-    fetch('/api/coins').then(res => res.json()).then(coins => {
-        if(coins[myTeam] !== undefined) {
-            document.getElementById('team-coins-val').innerText = coins[myTeam];
-        }
-    }).catch(err => err);
+    fetch('/api/coins?v=' + currentCoinsVersion)
+        .then(res => res.json())
+        .then(response => {
+            if (response.unchanged) return;
+            currentCoinsVersion = response.version;
+            let coins = response.data;
+            if(coins[myTeam] !== undefined) {
+                document.getElementById('team-coins-val').innerText = coins[myTeam];
+            }
+        }).catch(err => err);
 }
-setInterval(fetchCoins, 10000); 
+
 
 window.onload = function() {
     let statDiv = document.getElementById('status');
@@ -733,7 +700,84 @@ window.addEventListener('DOMContentLoaded', () => {
                 alert("ℹ️ Auf diesem Gerät/Browser passiert das Scannen automatisch im Hintergrund. Schließe dieses Menü und halte den NFC-Tag einfach direkt an die Oberkante deines Handys!");
             }
         };
-        
         manualScanDiv.insertBefore(nfcBtn, manualScanDiv.firstChild);
     }
+});
+// ==========================================
+// 🔌 SOCKET.IO - ECHTZEIT VERBINDUNG (NEU!)
+// ==========================================
+const socket = io(); // Verbindet sich sofort mit dem Server!
+
+// 1. Initialer Ladevorgang (Beim App-Start)
+loadPlayerChat(true);
+updateMap();
+fetchCoins();
+fetchPlayers();
+
+// 2. Wir warten völlig lautlos auf Befehle vom Server!
+socket.on('update_map', () => {
+    console.log("⚡ Server meldet: Neue Map-Daten!");
+    updateMap(); 
+});
+
+socket.on('update_chat', () => {
+    loadPlayerChat(false); 
+});
+
+socket.on('update_coins', () => {
+    fetchCoins(); 
+});
+
+socket.on('update_locations', () => {
+    fetchPlayers(); 
+});
+
+socket.on('update_stats', () => {
+    // Falls das Dashboard gerade offen ist, lade es neu
+    let modal = document.getElementById('shop-modal');
+    if(modal && modal.style.display === 'flex' && modal.innerHTML.includes('LEADERBOARD')) {
+        openStatsModal(); 
+    }
+});
+
+socket.on('show_ticket', (data) => {
+    // Falls noch ein altes Overlay offen ist
+    let existingTicket = document.getElementById('final-ticket-overlay');
+    if (existingTicket) existingTicket.remove();
+
+    // Wir fragen den Tresor über die sichere Route ab!
+    let secureTicketUrl = `/api/ticket/${myTeam}/${myPlayerNum}`;
+
+    let overlay = document.createElement('div');
+    overlay.id = 'final-ticket-overlay';
+    overlay.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+        background: rgba(0, 0, 0, 0.95); z-index: 99999;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        color: #00ffcc; font-family: monospace; text-align: center; padding: 20px;
+        box-sizing: border-box; backdrop-filter: blur(5px);
+    `;
+
+    overlay.innerHTML = `
+        <h1 style="color: #ffcc00; text-transform: uppercase; text-shadow: 0 0 10px #ffcc00; animation: pulse 2s infinite;">
+            🎉 EVAKUIERUNG ERFOLGREICH 🎉
+        </h1>
+        <p style="font-size: 16px; color: white; margin-bottom: 20px; white-space: pre-wrap;">${data.message}</p>
+        
+        <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 0 20px ${teamColors[myTeam]};">
+            <img src="${secureTicketUrl}" alt="Dein persönliches Ticket" style="width: 250px; height: 250px; display: block; object-fit: contain;">
+        </div>
+        
+        <p style="margin-top: 15px; color: #888; font-size: 14px;">AGENT-ID: <strong style="color:${teamColors[myTeam]}">${myTeam.toUpperCase()} ${myPlayerNum}</strong></p>
+        <p style="margin-top: 5px; color: #888; font-size: 12px;">Bitte Helligkeit des Displays erhöhen beim Scannen!</p>
+        
+        <button onclick="document.getElementById('final-ticket-overlay').remove()" 
+                style="margin-top: 30px; background: #333; color: white; border: 1px solid #666; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
+            Ticket schließen
+        </button>
+    `;
+
+    document.body.appendChild(overlay);
+    
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]);
 });

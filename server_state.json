@@ -1,0 +1,90 @@
+{
+  "teamWallets": {
+    "rot": 460,
+    "blau": 505,
+    "gruen": 550,
+    "gelb": 5
+  },
+  "playerStates": {
+    "rot": {
+      "1": {
+        "lastScan": 0,
+        "hacks": 0,
+        "distance": 0,
+        "trapsHit": 0
+      },
+      "2": {
+        "lastScan": 0,
+        "hacks": 0,
+        "distance": 0,
+        "trapsHit": 0
+      },
+      "3": {
+        "lastScan": 0,
+        "hacks": 0,
+        "distance": 0,
+        "trapsHit": 0
+      }
+    },
+    "blau": {
+      "1": {
+        "lastScan": 0,
+        "hacks": 1,
+        "distance": 0,
+        "trapsHit": 0
+      },
+      "2": {
+        "lastScan": 0,
+        "hacks": 1,
+        "distance": 0,
+        "trapsHit": 0
+      },
+      "3": {
+        "lastScan": 0,
+        "hacks": 0,
+        "distance": 0,
+        "trapsHit": 0
+      }
+    },
+    "gruen": {
+      "1": {
+        "lastScan": 0,
+        "hacks": 0,
+        "distance": 0,
+        "trapsHit": 0
+      },
+      "2": {
+        "lastScan": 0,
+        "hacks": 0,
+        "distance": 0,
+        "trapsHit": 0
+      },
+      "3": {
+        "lastScan": 0,
+        "hacks": 0,
+        "distance": 0,
+        "trapsHit": 0
+      }
+    },
+    "gelb": {
+      "1": {
+        "lastScan": 0,
+        "hacks": 0,
+        "distance": 0,
+        "trapsHit": 0
+      },
+      "2": {
+        "lastScan": 0,
+        "hacks": 0,
+        "distance": 0,
+        "trapsHit": 0
+      },
+      "3": {
+        "lastScan": 0,
+        "hacks": 0,
+        "distance": 0,
+        "trapsHit": 0
+      }
+    }
+  }
+}

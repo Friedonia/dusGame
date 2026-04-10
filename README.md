@@ -61,6 +61,7 @@ Abhängigkeiten installieren (falls nötig, z.B. für Express):
 
 Bash
 npm install express cors
+npm install socket.io
 Server starten:
 
 Bash
