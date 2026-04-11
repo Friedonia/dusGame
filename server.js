@@ -4,19 +4,12 @@ const { Server } = require('socket.io'); // 🚨 NEU für Sockets
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const Database = require('better-sqlite3'); // 🚨 NEU für SQLite-Datenbank
 
 const app = express();
 const server = http.createServer(app); // 🚨 Server einwickeln
 const io = new Server(server, { cors: { origin: '*' } }); // 🚨 Sockets starten
 const PORT = 3000;
-
-// ==========================================
-// 🗄️ DATEI-PFADE & CRASH-SCHUTZ
-// ==========================================
-const ZONES_FILE = path.join(__dirname, 'zones.json');
-const TRAILS_FILE = path.join(__dirname, 'trails.json'); 
-const INVENTORY_FILE = path.join(__dirname, 'inventory.json'); 
-const STATE_FILE = path.join(__dirname, 'server_state.json');
 
 app.use(cors());
 app.use(express.json());
@@ -25,12 +18,62 @@ app.use(express.static('public'));
 let globalVersions = { coins: Date.now(), stats: Date.now(), loc: Date.now(), inv: Date.now() };
 
 // ==========================================
-// 📡 SOCKET TRIGGER FUNKTIONEN (NEU)
+// 🗄️ DATENBANK & AUTOMATISCHE MIGRATION
+// ==========================================
+const db = new Database('game.db'); // Erstellt oder lädt die game.db
+
+// Tabelle erstellen, falls sie noch nicht existiert
+db.exec(`
+  CREATE TABLE IF NOT EXISTS game_data (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  )
+`);
+
+// Prüfen, ob die DB leer ist (für die JSON-Migration)
+const dbCount = db.prepare('SELECT COUNT(*) as count FROM game_data').get().count;
+
+if (dbCount === 0) {
+    console.log("⚠️ Datenbank ist leer! Starte Migration der alten JSON-Dateien...");
+    
+    const migrateFile = (filePath, key) => {
+        if (fs.existsSync(filePath)) {
+            try {
+                const data = fs.readFileSync(filePath, 'utf8');
+                db.prepare('INSERT INTO game_data (key, value) VALUES (?, ?)').run(key, data);
+                console.log(`✅ Datei ${path.basename(filePath)} erfolgreich in Datenbank übertragen (Key: ${key})`);
+            } catch (e) {
+                console.error(`❌ Fehler bei Migration von ${filePath}:`, e);
+            }
+        }
+    };
+
+    // Übertragen der alten JSON-Dateien in die SQLite DB
+    migrateFile(path.join(__dirname, 'zones.json'), 'zones');
+    migrateFile(path.join(__dirname, 'trails.json'), 'trails');
+    migrateFile(path.join(__dirname, 'inventory.json'), 'inventory');
+    migrateFile(path.join(__dirname, 'server_state.json'), 'server_state');
+    console.log("✅ Migration abgeschlossen! Das Spiel nutzt nun SQLite.");
+}
+
+// 🛡️ Hilfsfunktionen für das sichere Lesen & Schreiben in der DB
+function loadData(key, defaultVal) {
+    const row = db.prepare('SELECT value FROM game_data WHERE key = ?').get(key);
+    return row ? JSON.parse(row.value) : defaultVal;
+}
+
+function saveData(key, data) {
+    db.prepare('INSERT OR REPLACE INTO game_data (key, value) VALUES (?, ?)').run(key, JSON.stringify(data));
+}
+
+
+// ==========================================
+// 📡 SOCKET TRIGGER FUNKTIONEN
 // ==========================================
 function triggerMapUpdate() {
     mapVersion = Date.now();
     mapNeedsSaving = true;
-    io.emit('update_map'); // 📢 Sagt allen Handys: "Map hat sich geändert!"
+    io.emit('update_map'); 
 }
 
 function triggerStateUpdate(types = []) {
@@ -64,38 +107,33 @@ function getPolygonCenter(coordinates) {
 const MAX_INTERACT_DISTANCE = 60; 
 
 // ==========================================
-// 🗺️ KARTEN-DATENBANK (RAM-Trick)
+// 🗺️ KARTEN-DATENBANK (Jetzt über SQLite!)
 // ==========================================
 let gameSettings = {}; 
-let globalMapData = { type: "FeatureCollection", features: [] };
+let globalMapData = loadData('zones', { type: "FeatureCollection", features: [] });
+if (globalMapData.gameSettings) gameSettings = globalMapData.gameSettings; 
+
 let mapNeedsSaving = false;
 let mapVersion = Date.now();
 
-if (fs.existsSync(ZONES_FILE)) {
-    try {
-        globalMapData = JSON.parse(fs.readFileSync(ZONES_FILE));
-        if (globalMapData.gameSettings) gameSettings = globalMapData.gameSettings; 
-        console.log("✅ Zonen-Karte erfolgreich in den RAM geladen!");
-    } catch (e) { console.error("❌ Fehler:", e); }
-}
-
 setInterval(() => {
-    if (mapNeedsSaving) fs.writeFile(ZONES_FILE, JSON.stringify(globalMapData, null, 2), () => mapNeedsSaving = false);
+    if (mapNeedsSaving) {
+        saveData('zones', globalMapData);
+        mapNeedsSaving = false;
+    }
 }, 5000);
 
 // ==========================================
 // 🎒 PERSÖNLICHES INVENTAR (RUCKSACK)
 // ==========================================
-let playerInventory = {};
+let playerInventory = loadData('inventory', {});
 let invNeedsSaving = false;
 
-if (fs.existsSync(INVENTORY_FILE)) {
-    try { playerInventory = JSON.parse(fs.readFileSync(INVENTORY_FILE)); console.log("✅ Rucksäcke geladen!"); } 
-    catch (e) { console.error("❌ Fehler:", e); }
-}
-
 setInterval(() => {
-    if (invNeedsSaving) fs.writeFile(INVENTORY_FILE, JSON.stringify(playerInventory, null, 2), () => invNeedsSaving = false);
+    if (invNeedsSaving) {
+        saveData('inventory', playerInventory);
+        invNeedsSaving = false;
+    }
 }, 8000);
 
 // ==========================================
@@ -110,18 +148,17 @@ let playerStates = {
 };
 let stateNeedsSaving = false;
 
-if (fs.existsSync(STATE_FILE)) {
-    try {
-        let savedState = JSON.parse(fs.readFileSync(STATE_FILE));
-        if (savedState.teamWallets) teamWallets = savedState.teamWallets;
-        if (savedState.playerStates) {
-            for (let t in savedState.playerStates) { if (playerStates[t]) Object.assign(playerStates[t], savedState.playerStates[t]); }
-        }
-    } catch (e) { console.error("❌ Fehler:", e); }
+let savedState = loadData('server_state', {});
+if (savedState.teamWallets) teamWallets = savedState.teamWallets;
+if (savedState.playerStates) {
+    for (let t in savedState.playerStates) { if (playerStates[t]) Object.assign(playerStates[t], savedState.playerStates[t]); }
 }
 
 setInterval(() => {
-    if (stateNeedsSaving) fs.writeFile(STATE_FILE, JSON.stringify({ teamWallets, playerStates }, null, 2), () => stateNeedsSaving = false);
+    if (stateNeedsSaving) {
+        saveData('server_state', { teamWallets, playerStates });
+        stateNeedsSaving = false;
+    }
 }, 5000);
 
 function getSafePlayerState(team, player) {
@@ -209,6 +246,13 @@ app.post('/api/coins/manage', (req, res) => {
 // ==========================================
 function getSafeInventory(invKey) {
     if (!playerInventory[invKey]) playerInventory[invKey] = { trap: 0, buff: 0, revive: 0, emp: 0, defuse: 0, pickpocket: 0 };
+    
+    // Alte Rucksäcke um neue Items ergänzen, falls sie fehlen
+    if (playerInventory[invKey].defuse === undefined) playerInventory[invKey].defuse = 0;
+    if (playerInventory[invKey].pickpocket === undefined) playerInventory[invKey].pickpocket = 0;
+    if (playerInventory[invKey].revive === undefined) playerInventory[invKey].revive = 0;
+    if (playerInventory[invKey].emp === undefined) playerInventory[invKey].emp = 0;
+
     return playerInventory[invKey];
 }
 
@@ -243,15 +287,23 @@ app.post('/api/shop/use', (req, res) => {
     if (inv[itemType] <= 0) return res.status(400).json({ error: "Nicht im Rucksack!" });
 
     if (itemType === 'revive') {
+        // 1. Item aus dem Rucksack abziehen
         inv[itemType] -= 1;
         invNeedsSaving = true;
         triggerStateUpdate(['inv']);
-        if (!globalMapData.gameSettings) globalMapData.gameSettings = {};
-        if (!globalMapData.gameSettings.teamReviveTimes) globalMapData.gameSettings.teamReviveTimes = {};
-        globalMapData.gameSettings.teamReviveTimes[team] = Date.now();
-        if (playerStates[team]) { for (let p in playerStates[team]) playerStates[team][p].lastScan = 0; }
-        triggerMapUpdate(); triggerStateUpdate(['stats']);
-        return res.json({ success: true, message: "🚨 Team wiederbelebt!" });
+        
+        // 2. Cooldown für JEDEN Spieler im Team auf 0 setzen
+        if (playerStates[team]) { 
+            for (let p in playerStates[team]) {
+                playerStates[team][p].lastScan = 0; 
+            }
+        }
+        
+        // 3. Speichern und Handys updaten
+        stateNeedsSaving = true;
+        triggerStateUpdate(['stats']);
+        
+        return res.json({ success: true, message: "⏱️ Cooldown für das gesamte Team auf 0 gesetzt!" });
     }
 
     if (!zoneCode) return res.status(400).json({ error: "Zone fehlt!" });
@@ -294,8 +346,10 @@ app.post('/api/inventory/manage', (req, res) => {
 });
 
 app.post('/api/inventory/reset-all', (req, res) => {
-    playerInventory = {}; invNeedsSaving = true; triggerStateUpdate(['inv']);
-    fs.writeFileSync(INVENTORY_FILE, JSON.stringify({}));
+    playerInventory = {}; 
+    invNeedsSaving = true; 
+    saveData('inventory', playerInventory);
+    triggerStateUpdate(['inv']);
     res.json({ success: true, message: "Alle geleert!" });
 });
 
@@ -536,22 +590,20 @@ app.post('/api/zone-action', (req, res) => {
 // 📍 SPIELER STANDORTE & TRAILS
 // ==========================================
 let playerLocations = {};
-let playerTrails = {}; 
+let playerTrails = loadData('trails', {}); 
 let trailsNeedSaving = false;
 
-if (fs.existsSync(TRAILS_FILE)) {
-    try { playerTrails = JSON.parse(fs.readFileSync(TRAILS_FILE)); } catch (e) {}
-}
-
 setInterval(() => {
-    if (trailsNeedSaving) fs.writeFile(TRAILS_FILE, JSON.stringify(playerTrails, null, 2), () => trailsNeedSaving = false);
+    if (trailsNeedSaving) {
+        saveData('trails', playerTrails);
+        trailsNeedSaving = false;
+    }
 }, 10000);
 
 app.post('/api/location', (req, res) => {
     let { id, lat, lng, team, name } = req.body;
     const now = Date.now();
 
-// 🧠 GPS KALMAN-LITE & AUSREISSER-FILTER
     if (playerLocations[id]) {
         let lastLoc = playerLocations[id];
         let timeDiffSec = (now - lastLoc.lastUpdate) / 1000;
@@ -566,8 +618,6 @@ app.post('/api/location', (req, res) => {
     }
 
     playerLocations[id] = { lat, lng, team, name, lastUpdate: now };
-    
-    // 📢 NEU: Standort-Update triggern
     globalVersions.loc = now; 
     io.emit('update_locations'); 
 
@@ -600,8 +650,10 @@ app.get('/api/location', (req, res) => {
 app.get('/api/trails', (req, res) => { res.json(playerTrails); });
 
 app.post('/api/trails/reset', (req, res) => {
-    playerTrails = {}; fs.writeFileSync(TRAILS_FILE, JSON.stringify({}));
-    trailsNeedSaving = false; res.json({ success: true });
+    playerTrails = {}; 
+    trailsNeedSaving = true; 
+    saveData('trails', playerTrails);
+    res.json({ success: true });
 });
 
 // ==========================================
@@ -625,40 +677,36 @@ app.post('/api/chat', (req, res) => {
         if (chatMessages.length > 200) chatMessages.shift(); 
         
         chatVersion = Date.now(); 
-        io.emit('update_chat'); // 📢 NEU: Chat Event!
+        io.emit('update_chat'); 
         
         res.json({ success: true });
     } catch(err) { res.status(500).json({ success: false }); }
 });
-// CHAT RESET ROUTE
+
 app.post('/api/chat/reset', (req, res) => {
     chatMessages = []; 
     chatVersion = Date.now(); 
-    io.emit('update_chat'); // 📢 Sagt allen Handys: "Chat wurde geleert, bitte neu laden!"
+    io.emit('update_chat'); 
     res.json({ success: true, message: "Chat erfolgreich geleert!" });
     console.log(`chatMessages wurden zurückgesetzt!`);
-
 });
 
 // ==========================================
 // 🎟️ TICKET-TRESOR (ADMIN FREISCHALTUNG)
 // ==========================================
-let ticketsUnlocked = false; // Das Schloss ist am Anfang ZU!
+let ticketsUnlocked = false; 
 
-// Route zum Abrufen der Bilder
 app.get('/api/ticket/:team/:player', (req, res) => {
-    // 1. Wenn der Admin das Schloss noch nicht geöffnet hat: BLOCKIEREN!
     if (!ticketsUnlocked) {
         return res.status(403).send("❌ ZUGRIFF VERWEIGERT: Der Admin hat die Tickets noch nicht freigegeben!");
     }
 
-    // 2. Wenn geöffnet: Richtiges Bild suchen und senden
     const { team, player } = req.params;
-    const prefixes = { 'rot': 'r', 'blau': 'b', 'gruen': 'g', 'gelb': 'y' }; // Passe 'y' ggf. an deine Dateinamen an!
+    const prefixes = { 'rot': 'r', 'blau': 'b', 'gruen': 'g', 'gelb': 'y' }; 
     const prefix = prefixes[team] || 'x';
     const fileName = `${prefix}${player}.jpeg`;
     
-    // Pfad zum geheimen Ordner
+    // Dateizugriff bleibt erhalten, da das echte Bilddateien (JPEGs) auf der Platte sind
     const filePath = path.join(__dirname, 'secret_tickets', fileName);
 
     if (fs.existsSync(filePath)) {
@@ -668,20 +716,17 @@ app.get('/api/ticket/:team/:player', (req, res) => {
     }
 });
 
-// Admin-Befehl zum Schloss knacken & Push senden
 app.post('/api/admin/push-ticket', (req, res) => {
     const { message } = req.body;
-    
-    ticketsUnlocked = true; // 🔐 SCHLOSS WIRD GEÖFFNET!
-    io.emit('show_ticket', { message: message }); // Push an alle Handys
-    
+    ticketsUnlocked = true; 
+    io.emit('show_ticket', { message: message }); 
     res.json({ success: true, message: "Tresor geöffnet! Tickets werden jetzt auf den Handys angezeigt." });
 });
 
 // ==========================================
-// 🚀 SERVER START (Mit Socket.IO Server!)
+// 🚀 SERVER START
 // ==========================================
 server.listen(PORT, () => {
-    console.log(`🚀 Server läuft auf Port ${PORT}`);
+    console.log(`🚀 Server läuft auf Port ${PORT} (mit SQLite)`);
     console.log(`🔌 WebSockets SIND AKTIVIERT!`);
 });

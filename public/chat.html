@@ -197,7 +197,14 @@
     </style>
 </head>
 <body>
-
+<script>
+  // Prüft ob der Nutzer Admin-Rechte hat
+  // Setze dir diesen Wert z.B. einmalig über die Browser-Konsole: localStorage.setItem('role', 'admin')
+  if (localStorage.getItem('role') !== 'admin') {
+      alert("Admin-Bereich! Zugriff verweigert.");
+      window.location.replace('/index.html');
+  }
+</script>
     <div id="sidebar">
         <div id="sidebar-header">
             <h2>📡 Funkzentrale</h2>

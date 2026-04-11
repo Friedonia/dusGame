@@ -82,12 +82,14 @@
             
             // 1. Admin Login
             if (code === 'admin') {  // Den Code für das Admin-Panel kannst du hier ändern (z.B. 'geheim123')
+                // WICHTIG: Admin-Rechte speichern, damit admin.html ihn nicht aussperrt
+                localStorage.setItem('role', 'admin');
+                localStorage.setItem('playerToken', code);
                 window.location.href = 'admin.html';
                 return;
             }
             
             // 2. Spieler Codes (z.B. rot1, blau2, gruen3)
-            // Hier legst du fest, welcher Code auf welche URL weiterleitet
             const playerCodes = {
                 'rot1': { team: 'rot', player: 1 },
                 'rot2': { team: 'rot', player: 2 },
@@ -103,9 +105,17 @@
                 'gelb3': { team: 'gelb', player: 3 }
             };
 
-            // Wenn der Code in der Liste steht, zum HUD weiterleiten
+            // Wenn der Code in der Liste steht, Daten speichern und weiterleiten
             if (playerCodes[code]) {
                 const data = playerCodes[code];
+                
+                // WICHTIG: Die Werte im localStorage ablegen
+                // So wissen scan.js, player.js und chat.html, wer da gerade surft
+                localStorage.setItem('team', data.team);
+                localStorage.setItem('playerToken', code); // Wir nutzen den Code einfach als Token
+                localStorage.setItem('playerNum', data.player);
+                localStorage.removeItem('role'); // Verhindert, dass ein Spieler Admin-Rechte behält, falls sie am selben Handy wechseln
+
                 window.location.href = `player.html?team=${data.team}&player=${data.player}`;
                 return;
             }

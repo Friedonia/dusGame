@@ -1,4 +1,25 @@
 // ==========================================
+// 🔊 AUDIO & HAPTISCHES FEEDBACK SYSTEM
+// ==========================================
+window.playFeedback = function(type) {
+    // 1. Vibration
+    if (navigator.vibrate) {
+        if (type === 'success') navigator.vibrate([100, 50, 100]);
+        if (type === 'clump') navigator.vibrate([400, 100, 400]); // Error/Warnung
+        if (type === 'uium') navigator.vibrate(50); // UI Klick/Öffnen
+        if (type === 'dudim') navigator.vibrate([30, 50, 30]); // Chat/Funk
+    }
+    // 2. Audio
+    try {
+        let snd = new Audio(`/audio/${type}.mp3`);
+        snd.volume = 0.5; // Angenehme Lautstärke
+        snd.play();
+    } catch(e) {
+        console.log("Audio konnte nicht abgespielt werden:", e);
+    }
+}
+
+// ==========================================
 // 🛡️ ANTI-UNDEFINED SCHUTZ
 // ==========================================
 if (localStorage.getItem('team') === 'undefined' || localStorage.getItem('team') === 'null') {
@@ -98,6 +119,7 @@ function setupPlayerSwitcher() {
 if(localStorage.getItem('team')) setupPlayerSwitcher(); 
 
 window.changePlayer = function(num) {
+    playFeedback('uium'); // Klick Sound
     myPlayerNum = num;
     localStorage.setItem('playerNum', num);
     
@@ -114,6 +136,7 @@ window.changePlayer = function(num) {
 // ==========================================
 let hudCollapsed = false;
 window.toggleHud = function() {
+    playFeedback('uium'); // UI Klick
     const content = document.getElementById('hud-content-wrapper');
     const btn = document.getElementById('toggle-hud-btn');
     hudCollapsed = !hudCollapsed;
@@ -131,6 +154,7 @@ window.toggleHud = function() {
 // ==========================================
 let chatOpen = false;
 window.toggleChat = function() {
+    playFeedback('uium'); // Funkgerät öffnen/schließen
     const widget = document.getElementById('chat-widget');
     chatOpen = !chatOpen;
     if (chatOpen) {
@@ -148,6 +172,7 @@ window.sendChat = function() {
     if (!msg) return;
     
     input.value = ''; 
+    playFeedback('dudim'); // Sendesound
 
     fetch('/api/chat', { 
         method: 'POST', 
@@ -169,9 +194,14 @@ function loadPlayerChat(forceScroll = false) {
             const allMsgs = response.messages;
             const teamMsgs = allMsgs.filter(m => m.team === myTeam || m.team === 'all');
             
-            if (!chatOpen && teamMsgs.length > lastPlayerMsgCount && lastPlayerMsgCount !== 0) {
-                let badge = document.getElementById('chat-badge');
-                if(badge) badge.style.display = 'block';
+            // Wenn neue Nachrichten reinkommen...
+            if (teamMsgs.length > lastPlayerMsgCount && lastPlayerMsgCount !== 0) {
+                if (!chatOpen) {
+                    let badge = document.getElementById('chat-badge');
+                    if(badge) badge.style.display = 'block';
+                }
+                // Sound abspielen (Funk-Benachrichtigung)
+                playFeedback('dudim');
             }
             
             lastPlayerMsgCount = teamMsgs.length;
@@ -235,6 +265,7 @@ function updateMap() {
                     let banner = document.getElementById('announcement-banner');
                     banner.innerHTML = "⚠️ ADMIN: " + data.gameSettings.announcement.text;
                     banner.style.display = 'block';
+                    playFeedback('clump'); // Warnton bei Admin Announcement
                     setTimeout(() => { banner.style.display = 'none'; }, 8000); 
                 }
                 lastAnnouncementTime = data.gameSettings.announcement.timestamp;
@@ -267,15 +298,14 @@ function updateMap() {
             document.getElementById('coin-display').style.display = 'block';
         }
 
-        if (data.gameSettings && data.gameSettings.cooldownResetTime) {
-            let lastScan = parseInt(localStorage.getItem(`lastScanTime_${myTeam}_${myPlayerNum}`) || localStorage.getItem(`lastScanTime_${myPlayerNum}`)) || 0;
-            if (data.gameSettings.cooldownResetTime > lastScan) {
-                localStorage.setItem(`lastScanTime_${myTeam}_${myPlayerNum}`, 0);
-                localStorage.setItem(`cooldownModifier_${myTeam}_${myPlayerNum}`, 0);
-                localStorage.setItem(`lastScanTime_${myPlayerNum}`, 0);
-                localStorage.setItem(`cooldownModifier_${myPlayerNum}`, 0);
-            }
-        }
+if (data.gameSettings && data.gameSettings.cooldownResetTime) {
+    let knownReset = parseInt(localStorage.getItem('knownResetTime')) || 0;
+    // Wir prüfen ab jetzt, ob es ein NEUES Reset-Event vom Admin gab (nicht die pure Uhrzeit des Scans)
+    if (data.gameSettings.cooldownResetTime > knownReset) {
+        localStorage.setItem(`lastScanTime_${myTeam}_${myPlayerNum}`, 0);
+        localStorage.setItem('knownResetTime', data.gameSettings.cooldownResetTime); // Reset markieren!
+    }
+}
 
         if (data.gameSettings && data.gameSettings.teamCooldowns) {
             globalCooldownMins = parseInt(data.gameSettings.teamCooldowns[myTeam]) || 0;
@@ -366,6 +396,10 @@ setInterval(() => {
             if(manualInput) { manualInput.disabled = true; }
             
         } else {
+            // Cooldown frisch abgelaufen!
+            if (window.isCooldownActive) {
+                playFeedback('uium'); // Kleines Geräusch wenn Scanner wieder bereit
+            }
             window.isCooldownActive = false;
             localStorage.setItem(`lastScanTime_${tName}_${pNum}`, 0);
             
@@ -433,6 +467,7 @@ updateMap();
 // 🎒 RUCKSACK & SHOP MODAL (Optimiert)
 // ==========================================
 window.openShopModal = function() {
+    playFeedback('uium'); // Rucksack öffnen Sound
     let modal = document.getElementById('shop-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -467,7 +502,7 @@ window.openShopModal = function() {
             <div style="background:#111; padding:15px; border:2px solid ${teamColors[myTeam]}; border-radius:10px; width:95%; max-width:400px; max-height:85vh; overflow-y:auto;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                     <h2 style="margin:0; font-size:18px;">🛒 BLACK MARKET</h2>
-                    <button onclick="document.getElementById('shop-modal').style.display='none'" style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px; font-weight:bold;">X</button>
+                    <button onclick="document.getElementById('shop-modal').style.display='none'; playFeedback('uium');" style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px; font-weight:bold;">X</button>
                 </div>
                 
                 <div style="background:#222; padding:10px; border-radius:5px; margin-bottom:15px; text-align:center;">
@@ -478,8 +513,8 @@ window.openShopModal = function() {
                 
                 ${drawItem('trap', '🪤 Falle (Lokal)', 'Bestraft Scanner (+1 Min).', 30, '#ff8800', inv.trap)}
                 ${drawItem('buff', '⚡ Buff (Lokal)', 'Belohnt dein Team (-1 Min).', 30, '#00ffcc', inv.buff)}
-                ${drawItem('entschaerfung', '✂️ Entschärfer (Lokal)', 'Löscht alle Fallen der Zone.', 40, '#ff00ff', inv.entschaerfung)}
-                ${drawItem('taschendieb', '🕵️‍♂️ Dieb (Lokal)', 'Klaut 15 Coins an Feindes-Zone.', 30, '#8a2be2', inv.pickpocket)}
+                ${drawItem('defuse', '✂️ Entschärfer (Passiv)', 'Löscht alle Fallen der Zone.', 40, '#ff00ff', inv.defuse)}
+                ${drawItem('pickpocket', '🕵️‍♂️ Dieb (Passiv)', 'Klaut Coins an Feindes-Zone.', 30, '#8a2be2', inv.pickpocket)}
                 ${drawItem('emp', '⚡ EMP-Granate (Lokal)', 'Sperrt Zone für 15 Minuten.', 80, '#ff3333', inv.emp)}
                 ${drawItem('revive', '🚑 Revive (Global)', 'Löscht Team-Cooldown.', 200, '#ff4444', inv.revive)}
 
@@ -497,24 +532,72 @@ window.buyItemGlobal = function(type) {
     })
     .then(res => res.json())
     .then(data => {
-        if (data.error) alert("❌ " + data.error);
-        else openShopModal(); 
+        if (data.error) {
+            playFeedback('clump'); // Error Sound
+            alert("❌ " + data.error);
+        } else {
+            playFeedback('success'); // Gekauft Sound
+            openShopModal(); 
+        }
     });
 };
 
 window.useItemGlobal = function(type) {
-    if(!confirm("Bist du sicher? Das Item wird sofort ausgelöst!")) return;
+    // 🚨 1. PASSIVE ITEMS ABFANGEN
+    if (type === 'defuse') {
+        playFeedback('clump');
+        alert("ℹ️ Der Entschärfer ist PASSIV! Du musst ihn nicht hier aktivieren. Wenn du eine gegnerische Falle scannst, erscheint in der Scan-App automatisch ein Button zum Entschärfen.");
+        return;
+    }
+    if (type === 'pickpocket') {
+        playFeedback('clump');
+        alert("ℹ️ Der Dieb ist PASSIV! Behalte ihn einfach im Rucksack. Wenn du eine gegnerische Zone einnimmst, stiehlt er ganz von alleine Coins vom Feind!");
+        return;
+    }
+
+    // 🚨 2. SANI-KASTEN (Revive) - Braucht keine Zone!
+    if (type === 'revive') {
+        if(!confirm("🚨 Sani-Kasten einsetzen? Dein gesamtes Team wird sofort wiederbelebt!")) return;
+        
+        fetch('/api/shop/use', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ team: myTeam, player: myPlayerNum, itemType: type })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.error) {
+                playFeedback('clump');
+                alert("❌ " + data.error);
+            } else {
+                playFeedback('success');
+                alert("✅ " + data.message);
+                if (typeof openShopModal === 'function') openShopModal(); 
+            }
+        });
+        return;
+    }
+
+    // 🚨 3. MAP-ITEMS (Falle, Buff, EMP) - Brauchen eine Zone!
+    const targetZone = prompt(`Auf welche Zone möchtest du das Item anwenden?\nGib den ZONEN-CODE ein (z.B. TR#9694#33):`);
+    
+    // Wenn der Spieler auf Abbrechen drückt
+    if (!targetZone || targetZone.trim() === "") return;
+
     fetch('/api/shop/use', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ team: myTeam, player: myPlayerNum, itemType: type })
+        body: JSON.stringify({ team: myTeam, player: myPlayerNum, itemType: type, zoneCode: targetZone.trim() })
     })
     .then(res => res.json())
     .then(data => {
-        if (data.error) alert("❌ " + data.error);
-        else {
+        if (data.error) {
+            playFeedback('clump');
+            alert("❌ " + data.error);
+        } else {
+            playFeedback('success');
             alert("✅ " + data.message);
-            openShopModal(); 
+            if (typeof openShopModal === 'function') openShopModal(); 
         }
     });
 };
@@ -523,6 +606,7 @@ window.useItemGlobal = function(type) {
 // 📊 STATS MODAL (Optimiert)
 // ==========================================
 window.openStatsModal = function() {
+    playFeedback('uium'); // Akte öffnen Sound
     let modal = document.getElementById('shop-modal'); 
     if (!modal) {
         modal = document.createElement('div');
@@ -579,7 +663,7 @@ window.openStatsModal = function() {
             <div style="background:#111; padding:15px; border:2px solid ${teamColors[myTeam]}; border-radius:10px; width:95%; max-width:400px; max-height:85vh; overflow-y:auto;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                     <h2 style="margin:0; font-size:18px;">📊 LEADERBOARD</h2>
-                    <button onclick="document.getElementById('shop-modal').style.display='none'" style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px; font-weight:bold;">X</button>
+                    <button onclick="document.getElementById('shop-modal').style.display='none'; playFeedback('uium');" style="background:red; color:white; border:none; padding:5px 10px; border-radius:5px; font-weight:bold;">X</button>
                 </div>
                 
                 <h3 style="color:#aaa; border-bottom:1px solid #444; padding-bottom:5px; font-size:14px;">Globale Rangliste:</h3>
@@ -606,6 +690,7 @@ window.openStatsModal = function() {
 // ==========================================
 var myLocationMarker;
 window.startGPS = function() {
+    playFeedback('uium');
     const statusDiv = document.getElementById('status');
     if ("geolocation" in navigator) {
         if(statusDiv) statusDiv.innerText = "GPS wird gesucht...";
@@ -627,6 +712,7 @@ window.startGPS = function() {
 }
 
 window.submitManualCode = function() {
+    playFeedback('uium');
     const inputField = document.getElementById('manual-code-input');
     let rawCode = inputField.value.trim().toUpperCase(); 
     if (!rawCode) { alert("Bitte gib einen Code ein!"); return; }
@@ -669,6 +755,7 @@ window.addEventListener('DOMContentLoaded', () => {
         nfcBtn.style.fontSize = "16px";
         
         nfcBtn.onclick = async function() {
+            playFeedback('uium');
             if ('NDEFReader' in window) {
                 try {
                     const ndef = new NDEFReader();
@@ -694,9 +781,11 @@ window.addEventListener('DOMContentLoaded', () => {
                         }
                     });
                 } catch (error) {
+                    playFeedback('clump');
                     alert("⚠️ NFC Scanner Fehler: " + error);
                 }
             } else {
+                playFeedback('clump');
                 alert("ℹ️ Auf diesem Gerät/Browser passiert das Scannen automatisch im Hintergrund. Schließe dieses Menü und halte den NFC-Tag einfach direkt an die Oberkante deines Handys!");
             }
         };
@@ -741,6 +830,8 @@ socket.on('update_stats', () => {
 });
 
 socket.on('show_ticket', (data) => {
+    playFeedback('success'); // Erfolgs-Sound für die Rheinturm-Tickets
+    
     // Falls noch ein altes Overlay offen ist
     let existingTicket = document.getElementById('final-ticket-overlay');
     if (existingTicket) existingTicket.remove();
@@ -771,13 +862,78 @@ socket.on('show_ticket', (data) => {
         <p style="margin-top: 15px; color: #888; font-size: 14px;">AGENT-ID: <strong style="color:${teamColors[myTeam]}">${myTeam.toUpperCase()} ${myPlayerNum}</strong></p>
         <p style="margin-top: 5px; color: #888; font-size: 12px;">Bitte Helligkeit des Displays erhöhen beim Scannen!</p>
         
-        <button onclick="document.getElementById('final-ticket-overlay').remove()" 
+        <button onclick="document.getElementById('final-ticket-overlay').remove(); playFeedback('uium');" 
                 style="margin-top: 30px; background: #333; color: white; border: 1px solid #666; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
             Ticket schließen
         </button>
     `;
 
     document.body.appendChild(overlay);
-    
-    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]);
 });
+
+// ==========================================
+// 📡 WALD-FAKTOR: RECONNECT NACH STANDBY & OFFLINE QUEUE
+// ==========================================
+
+// Überwacht, ob das Handy aus dem Standby aufwacht oder der Tab gewechselt wird
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+        console.log("📱 Handy aufgewacht! Prüfe Verbindung...");
+        
+        // 1. Wenn der WebSocket tot ist, manuell neu verbinden
+        if (socket && !socket.connected) {
+            console.log("🔄 Stelle Verbindung zum Server wieder her...");
+            socket.connect();
+        }
+        
+        // 2. Den kompletten Spielstand vom Server anfragen
+        fetch('/api/game-state')
+            .then(res => res.json())
+            .then(state => {
+                if (window.updateGameUI) {
+                    window.updateGameUI(state);
+                } else {
+                    location.reload(); 
+                }
+            })
+            .catch(err => console.log("Kein Netz für Synchronisation:", err));
+    }
+});
+
+socket.on("disconnect", () => {
+    console.warn("⚠️ Verbindung zum Server verloren. (Edge/Funkloch)");
+});
+
+socket.on("connect", () => {
+    console.log("✅ Erfolgreich mit Server verbunden!");
+});
+
+function syncOfflineQueue() {
+    let queue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+    if (queue.length === 0) return;
+
+    console.log("📡 Sende " + queue.length + " zwischengespeicherte Offline-Aktionen...");
+    
+    queue.forEach(payload => {
+        fetch('/api/zone-action', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).then(() => {
+            // Wenn erfolgreich gesendet, zeige einen kleinen Banner und einen positiven Sound
+            playFeedback('success');
+            let banner = document.getElementById('announcement-banner');
+            banner.innerHTML = "✅ Offline-Scans erfolgreich nachgetragen!";
+            banner.style.display = 'block';
+            banner.style.background = "rgba(0, 255, 0, 0.9)";
+            setTimeout(() => { banner.style.display = 'none'; }, 4000);
+        }).catch(e => console.log("Immer noch offline..."));
+    });
+
+    // Warteschlange leeren
+    localStorage.setItem('offlineQueue', '[]');
+}
+
+// Event-Listener: Feuern, wenn das Netz wieder da ist oder WebSocket reconnectet
+window.addEventListener('online', syncOfflineQueue);
+if (socket) socket.on('connect', syncOfflineQueue);

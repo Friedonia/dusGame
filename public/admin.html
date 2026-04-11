@@ -12,6 +12,14 @@
         navigator.serviceWorker.register('/sw.js').catch(err => console.log("SW Error", err));
     }
 </script>
+<script>
+  // Prüft ob der Nutzer Admin-Rechte hat
+  // Setze dir diesen Wert z.B. einmalig über die Browser-Konsole: localStorage.setItem('role', 'admin')
+  if (localStorage.getItem('role') !== 'admin') {
+      alert("Admin-Bereich! Zugriff verweigert.");
+      window.location.replace('/index.html');
+  }
+</script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
     <link rel="stylesheet" href="admin.css">

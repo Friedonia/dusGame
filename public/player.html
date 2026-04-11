@@ -124,6 +124,13 @@
     </style>
 </head>
 <body>
+    <script>
+  // Prüft ob der Nutzer als Spieler angemeldet ist
+  if (!localStorage.getItem('playerToken') && !localStorage.getItem('team')) {
+      alert("Zugriff verweigert! Du musst angemeldet sein.");
+      window.location.replace('/index.html'); // Leitet zur Startseite um
+  }
+</script>
 
     <div id="map"></div>
     <div id="announcement-banner">⚠️ ADMIN NACHRICHT</div>

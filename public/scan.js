@@ -13,6 +13,19 @@ if (team && teamColors[team]) {
     document.getElementById('terminal').style.boxShadow = `0 10px 30px rgba(${teamColors[team].replace('#', '')}88)`;
 }
 
+// Audio Feedbacks
+function playFeedback(type) {
+    if (navigator.vibrate) {
+        if (type === 'success') navigator.vibrate([100, 50, 100]);
+        if (type === 'clump') navigator.vibrate([400, 100, 400]);
+    }
+    try {
+        let snd = new Audio(`/audio/${type}.mp3`);
+        snd.volume = 0.5;
+        snd.play();
+    } catch(e) {}
+}
+
 window.returnToHQ = function() {
     window.location.href = `/player.html?team=${team}&player=${myPlayerNum}`; 
 };
@@ -31,7 +44,6 @@ if (!team) {
     messageDiv.innerHTML = "❌ Fehler: Ungültiger oder beschädigter NFC-Tag.";
     returnBtn.style.display = "block";
 } else {
-    // 1. Wir fragen den Server nach der Zone UND dem Inventar
     fetch(`/api/zone/${encodeURIComponent(scannedCode)}?team=${team}&player=${myPlayerNum}`)
     .then(res => {
         if(!res.ok) throw new Error("Zone nicht gefunden");
@@ -40,7 +52,7 @@ if (!team) {
     .then(data => {
         let props = data.zone;
         let gameSettings = data.gameSettings;
-        let inventory = data.inventory; // NEU: Rucksack wird direkt mitgeladen
+        let inventory = data.inventory; 
 
         if (gameSettings.gamePaused) {
             messageDiv.innerHTML = "🛑 <b>SPIEL PAUSIERT</b><br>Die Administratoren haben die Zonen gesperrt.";
@@ -49,12 +61,13 @@ if (!team) {
         }
 
         // ==========================================
-        // ⏳ COOLDOWN & RESET CHECK (Global!)
+        // ⏳ COOLDOWN & RESET CHECK (Uhrzeit-Drift Sicher!)
         // ==========================================
         if (gameSettings.cooldownResetTime) {
-            let lastScan = parseInt(localStorage.getItem(`lastScanTime_${team}_${myPlayerNum}`)) || 0;
-            if (gameSettings.cooldownResetTime > lastScan) {
+            let knownReset = parseInt(localStorage.getItem('knownResetTime')) || 0;
+            if (gameSettings.cooldownResetTime > knownReset) {
                 localStorage.setItem(`lastScanTime_${team}_${myPlayerNum}`, 0);
+                localStorage.setItem('knownResetTime', gameSettings.cooldownResetTime);
             }
         }
 
@@ -73,7 +86,6 @@ if (!team) {
             return; 
         }
 
-        // NEU: EMP CHECK IM SCANNER!
         if (props.empUntil && props.empUntil > Date.now()) {
             let leftMins = Math.ceil((props.empUntil - Date.now()) / 60000);
             messageDiv.innerHTML = `⚡ <b>SYSTEMAUSFALL</b><br>Zone durch EMP-Granate getroffen! Neustart in ca. ${leftMins} Minute(n).`;
@@ -81,21 +93,20 @@ if (!team) {
             return;
         }
 
-        // ==========================================
-        // 📍 GPS ODER SOFORT STARTEN?
-        // ==========================================
         const isGpsRequired = gameSettings.gpsRequired !== false;
 
         if (isGpsRequired) {
-            messageDiv.innerHTML = `<h3 style="color:#00ccff; text-align:center;">🛰️ Suche GPS Signal...</h3><p style="text-align:center; font-size:12px; color:#888;">Standort wird verifiziert (Anti-Cheat).</p>`;
+            messageDiv.innerHTML = `<h3 style="color:#00ccff; text-align:center;">🛰️ Suche GPS Signal...</h3><p style="text-align:center; font-size:12px; color:#888;">Standort wird verifiziert.</p>`;
             
             if ("geolocation" in navigator) {
                 navigator.geolocation.getCurrentPosition((position) => {
                     currentLat = position.coords.latitude;
                     currentLng = position.coords.longitude;
+                    messageDiv.innerHTML = ""; 
                     renderUI(props, gameSettings, inventory); 
                 }, (error) => {
-                    messageDiv.innerHTML = `❌ <b>Fehler:</b> Der Admin hat den GPS-Zwang aktiviert! Bitte erlaube den Standort in deinem Browser.`;
+                    console.error("GPS Fehler:", error);
+                    messageDiv.innerHTML = `❌ <b>Fehler:</b> Der Admin hat den GPS-Zwang aktiviert! Bitte erlaube den Standort oder warte auf ein Signal.`;
                     returnBtn.style.display = "block";
                 }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
             } else {
@@ -112,14 +123,10 @@ if (!team) {
     });
 }
 
-// ==========================================
-// 🖥️ UI AUFBAUEN & FALLEN AUSLÖSEN
-// ==========================================
 function renderUI(props, gameSettings, inventory, showGpsText = true) {
     const newColor = teamColors[team];
     let isGray = (props.color === "#808080" || !props.color);
 
-    // 🔌 EMP CHECK
     if (props.empUntil && props.empUntil > Date.now()) {
         messageDiv.innerHTML = `<div style="color:#00ffff; border: 2px solid #00ffff; padding: 15px; border-radius:8px; background:rgba(0,255,255,0.1);">
             🔌 <b>EMP AKTIV</b><br>Diese Zone wurde durch eine EMP-Granate komplett lahmgelegt. Scanner blockiert!
@@ -139,10 +146,8 @@ function renderUI(props, gameSettings, inventory, showGpsText = true) {
     }
 
     let uiHtml = "";
-    // ==========================================
-    // 👑 & 🏰 ANZEIGE FÜR BESONDERE ZONEN
-    // ==========================================
     let specialHtml = "";
+    
     if (props.isKotH) {
         specialHtml += `<div style="background:#222; border:1px solid #ffcc00; color:#ffcc00; padding:10px; border-radius:8px; margin-bottom:15px; font-weight:bold; text-align:center; box-shadow: 0 0 10px rgba(255, 204, 0, 0.3);">
             👑 KING OF THE HILL<br><span style="font-size:12px; font-weight:normal; color:#aaa;">Generiert 3x so viele Coins!</span>
@@ -159,35 +164,29 @@ function renderUI(props, gameSettings, inventory, showGpsText = true) {
     }
     uiHtml += specialHtml;
 
-    // 🚨 MINENFELD LOGIK
-if (trapsTriggered > 0) {
-        // 1. Hat der Spieler ein Entschärfungs-Kit im Rucksack?
+    if (trapsTriggered > 0) {
         if (inventory && inventory.defuse > 0) {
             uiHtml += `<div style="color:#ffcc00; font-weight:bold; margin-bottom:15px; border: 1px solid #ffcc00; padding: 10px; border-radius:8px; background:rgba(255,204,0,0.1);">
                 🛠️ ENTSCHÄRFUNGS-KIT EINGESETZT!<br><span style="font-size:12px; color:#ddd;">Du bist in ${trapsTriggered} Falle(n) getreten, aber dein Kit hat sie eliminiert!</span>
-               </div>`;
+            </div>`;
             
-            // Wir sagen dem Server: Lösche die Fallen!
             fetch('/api/zone-action', { 
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' }, 
                 body: JSON.stringify({ code: scannedCode, action: 'defuse_traps', team: team, player: myPlayerNum }) 
             });
-            inventory.defuse -= 1; // Optisch im Scanner abziehen
+            inventory.defuse -= 1; 
             
         } else {
-            // 2. Kein Kit! Die Falle schnappt zu!
             const now = Date.now();
             localStorage.setItem(`lastScanTime_${team}_${myPlayerNum}`, now); 
             
-            // Spieler-Uhr starten
             fetch('/api/player-scan', { 
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' }, 
                 body: JSON.stringify({ team: team, player: myPlayerNum, timestamp: now }) 
             });
             
-            // 💣 WICHTIG: Hier wird 'trapsHit' an den Server gesendet für das Sprengmeister-Abzeichen!
             fetch('/api/zone-action', { 
                 method: 'POST', 
                 headers: { 'Content-Type': 'application/json' }, 
@@ -197,20 +196,22 @@ if (trapsTriggered > 0) {
                     team: team, 
                     player: myPlayerNum, 
                     cooldownChange: trapsTriggered - buffsTriggered, 
-                    trapsHit: trapsTriggered  // <-- Das ist der entscheidende Wert für die Stats!
+                    trapsHit: trapsTriggered 
                 }) 
             });
 
-            // Fette rote Fehlermeldung im Scanner anzeigen
+            playFeedback('clump');
             messageDiv.innerHTML = `<div style="color:#ff4444; border: 2px solid #ff4444; padding: 15px; border-radius:8px; background:rgba(255,0,0,0.1);">
                 💥 MINENFELD AUSGELÖST!<br>
                 <span style="font-size:14px; color:#ddd;">Du bist in ${trapsTriggered} Falle(n) getreten. Dein Team hat +${trapsTriggered} Min. Cooldown!</span>
-               </div>`;
-            returnBtn.style.display = "block"; 
-            return; // Abbruch! Keine Knöpfe mehr anzeigen.
+            </div>
+            <p style="font-size:12px; color:#aaa; margin-top:15px;">Automatische Rückkehr...</p>`;
+            
+            setTimeout(() => { returnToHQ(); }, 3500);
+            returnBtn.style.display = "none";
+            return; 
         }
     } else if (buffsTriggered > 0) {
-        // Falls nur Buffs da sind (und keine Fallen)
         fetch('/api/zone-action', { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
@@ -232,10 +233,6 @@ if (trapsTriggered > 0) {
         uiHtml += `<button onclick="executeAction('attack')" class="btn" style="background:#ff3333; color:white;">⚔️ Angreifen (Gegner Lvl ${props.level})</button>`;
     }
 
-
-// ==========================================
-    // 🎒 RUCKSACK-ITEMS PLATZIEREN
-    // ==========================================
     if (gameSettings.shopEnabled !== false) {
         uiHtml += `<div id="inventory-section" style="margin-top:20px; text-align:center; color:#aaa;"><i>Durchsuche Rucksack... 🎒</i></div>`;
         
@@ -244,27 +241,28 @@ if (trapsTriggered > 0) {
         .then(inv => {
             let invHtml = `<h3 style="color:#aaa; font-size:14px; text-transform:uppercase; text-align:left;">🎒 Aus dem Rucksack:</h3>`;
             
-            // Helfer-Funktion für die Buttons
             const btn = (id, name, color, count) => {
                 if(count > 0) return `<button onclick="useItemLocal('${id}')" class="btn" style="background:${color}; color:${id==='buff'?'black':'white'}; margin-bottom:8px;">${name} (${count})</button>`;
                 return '';
             };
 
             if (props.color === newColor) {
-                // EIGENE ZONE
                 invHtml += btn('buff', '⚡ Buff platzieren', '#00ffcc', inv.buff);
-                
                 if(!inv.buff) invHtml += `<p style="font-size: 13px; color:#666;">Keine passenden Items im Rucksack.</p>`;
             } 
             else {
-                // FEINDLICHE ODER GRAUE ZONE
                 invHtml += btn('trap', '🪤 Falle legen', '#ff8800', inv.trap);
                 invHtml += btn('drohne', '🚁 Drohne (Scannen)', '#0088ff', inv.drohne);
-                invHtml += btn('entschaerfung', '✂️ Entschärfen', '#ff00ff', inv.entschaerfung);
                 invHtml += btn('emp', '⚡ EMP werfen', '#ff3333', inv.emp);
-                
-                if (!isGray) {
-                    invHtml += btn('taschendieb', '🕵️‍♂️ Taschendieb', '#8a2be2', inv.taschendieb);
+
+                let passiveText = [];
+                if (inv.defuse > 0) passiveText.push(`✂️ ${inv.defuse}x Entschärfer`);
+                if (!isGray && inv.pickpocket > 0) passiveText.push(`🕵️‍♂️ ${inv.pickpocket}x Dieb`);
+
+                if (passiveText.length > 0) {
+                    invHtml += `<div style="font-size: 13px; color:#aaa; margin-top:12px; background:#222; padding:8px; border-radius:5px;">
+                        🛡️ <b>Passive Items aktiv:</b><br>${passiveText.join(' | ')}
+                    </div>`;
                 }
 
                 if(!inv.trap && !inv.drohne && !inv.entschaerfung && !inv.emp && !inv.taschendieb) {
@@ -281,7 +279,7 @@ if (trapsTriggered > 0) {
 }
 
 // ==========================================
-// 🚀 AKTIONEN SENDEN 
+// 🚀 AKTIONEN SENDEN & REDIRECT
 // ==========================================
 function registerScanToServer() {
     const now = Date.now();
@@ -296,15 +294,16 @@ function registerScanToServer() {
 
 window.executeAction = function(actionType) {
     const newColor = teamColors[team];
+    const payload = { code: scannedCode, action: actionType, newColor: newColor, playerLat: currentLat, playerLng: currentLng, team: team, player: myPlayerNum };
+
     fetch('/api/zone-action', { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ code: scannedCode, action: actionType, newColor: newColor, playerLat: currentLat, playerLng: currentLng, team: team, player: myPlayerNum }) 
+        body: JSON.stringify(payload) 
     })
     .then(res => res.json())
     .then(result => {
         if(result.success) {
-            // NEU: Wenn es ein freier Angriff auf ein gefallenes Team war, KEIN Cooldown starten!
             if (!result.noCooldown) {
                 registerScanToServer();
             }
@@ -312,10 +311,43 @@ window.executeAction = function(actionType) {
             let cdNotice = result.noCooldown ? `<br><br><span style="color:#00ffcc; font-weight:bold;">🆓 Freier Angriff! (Gegner hat kein HQ)</span>` : "";
             let stealNotice = result.stealMessage ? `<br><br><span style="color:#ffcc00; font-weight:bold; background:#222; padding:5px; border-radius:5px; display:inline-block;">${result.stealMessage}</span>` : "";
             
-            messageDiv.innerHTML = `<h2 style="color:#33ff33; font-size:20px;">✅ Aktion erfolgreich!</h2><p>Zone gesichert.${stealNotice}${cdNotice}</p>`;
+            playFeedback('success');
+            
+            messageDiv.innerHTML = `
+                <h2 style="color:#33ff33; font-size:22px;">✅ Erfolgreich!</h2>
+                <p>Die Aktion wurde verarbeitet.</p>
+                ${stealNotice}
+                ${cdNotice}
+                <p style="font-size:13px; color:#aaa; margin-top:20px;">Kehre zum Radar zurück... ⏳</p>
+            `;
+            returnBtn.style.display = "none";
+
+            // AUTOMATISCHER REDIRECT!
+            setTimeout(() => { returnToHQ(); }, 2500);
+
         } else if (result.error) {
+            playFeedback('clump');
             messageDiv.innerHTML = `<h2 style="color:#ff4444; font-size:20px;">❌ Abgelehnt</h2><p>${result.error}</p>`;
         }
+    })
+    .catch(err => {
+        // OFFLINE QUEUE
+        let queue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+        queue.push(payload);
+        localStorage.setItem('offlineQueue', JSON.stringify(queue));
+
+        registerScanToServer();
+        playFeedback('success');
+
+        messageDiv.innerHTML = `
+            <div style="background:#ffcc00; color:black; padding:15px; border-radius:8px;">
+                <h2 style="margin:0;">📡 Kein Internet!</h2>
+                <p>Die Aktion wurde lokal gespeichert. Sie wird automatisch zum Server übertragen, sobald du wieder Empfang hast.</p>
+                <p style="font-size:12px; margin-top:10px;">Kehre zum Radar zurück... ⏳</p>
+            </div>`;
+        
+        returnBtn.style.display = "none";
+        setTimeout(() => { returnToHQ(); }, 3500);
     });
 };
 
@@ -323,16 +355,32 @@ window.useItemLocal = function(itemType) {
     let confirmMsg = itemType === 'emp' ? "Willst du wirklich eine EMP-Granate zünden? (Zone 5 Min blockiert)" : "Item aus Rucksack platzieren?";
     if(!confirm(confirmMsg)) return;
 
+    const payload = { team: team, player: myPlayerNum, itemType: itemType, zoneCode: scannedCode };
+
     fetch('/api/shop/use', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ team: team, player: myPlayerNum, itemType: itemType, zoneCode: scannedCode })
-    }).then(res => res.json()).then(response => {
+        body: JSON.stringify(payload)
+    })
+    .then(res => res.json())
+    .then(response => {
         if(response.error) {
+            playFeedback('clump');
             alert("Fehler: " + response.error);
         } else {
-            registerScanToServer(); // Nach Nutzung Scanner abkühlen lassen
-            messageDiv.innerHTML = `<h2 style="color:#ffcc00; font-size:20px;">🎒 Item platziert!</h2><p>${response.message}</p>`;
+            registerScanToServer(); 
+            playFeedback('success');
+            messageDiv.innerHTML = `
+                <h2 style="color:#ffcc00; font-size:20px;">🎒 Item platziert!</h2>
+                <p>${response.message}</p>
+                <p style="font-size:13px; color:#aaa; margin-top:20px;">Kehre zum Radar zurück... ⏳</p>
+            `;
+            returnBtn.style.display = "none";
+            setTimeout(() => { returnToHQ(); }, 2500);
         }
+    })
+    .catch(e => {
+        playFeedback('clump');
+        alert("Aktion fehlgeschlagen. Kein Netz!");
     });
 };

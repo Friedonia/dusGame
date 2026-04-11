@@ -1,8 +1,8 @@
 {
   "teamWallets": {
-    "rot": 480,
-    "blau": 530,
-    "gruen": 575,
+    "rot": 580,
+    "blau": 655,
+    "gruen": 700,
     "gelb": 5
   },
   "playerStates": {
