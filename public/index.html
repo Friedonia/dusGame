@@ -2,233 +2,125 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <title>Admin Dashboard - Live Controller</title>
-    <link rel="manifest" href="/manifest.json">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-
-<script>
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(err => console.log("SW Error", err));
-    }
-</script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
-    <link rel="stylesheet" href="style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DusGame - Login</title>
+    <style>
+        body, html {
+            margin: 0; padding: 0; height: 100%;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #111; color: white;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+        }
+        .login-box {
+            background: #222;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            text-align: center;
+            width: 80%;
+            max-width: 350px;
+        }
+        h1 { margin-top: 0; color: #ff8800; }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            margin: 15px 0;
+            border: 1px solid #444;
+            border-radius: 6px;
+            background: #333;
+            color: white;
+            font-size: 16px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #ff8800;
+            color: black;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover { background: #e67a00; }
+        
+        .footer {
+            margin-top: 30px;
+            font-size: 13px;
+        }
+        .footer a {
+            color: #aaa;
+            text-decoration: none;
+            margin: 0 10px;
+            transition: color 0.3s;
+        }
+        .footer a:hover { color: white; }
+    </style>
 </head>
 <body>
 
-    <div id="main-container">
-        
-        <div id="map">
-            <div id="legend">
-                <div class="legend-title" onclick="toggleSection('content-zones', this)">▼ Ebenen ein/ausblenden</div>
-                <div id="content-zones" class="legend-section">
-                    <label class="toggle-label"><input type="checkbox" id="check-zones" checked onchange="toggleFeatures('zone', this.checked)"> 🟩 Zonen anzeigen</label>
-                    <label class="toggle-label"><input type="checkbox" id="check-lines" checked onchange="toggleFeatures('transit-line', this.checked)"> 🚉 Linien anzeigen</label>
-                    <label class="toggle-label"><input type="checkbox" id="check-tags" checked onchange="toggleFeatures('nfc-tag', this.checked)"> 🟠 NFC-Punkte anzeigen</label>
-                </div>
-
-                <div class="legend-title" onclick="toggleSection('content-players', this)" style="margin-bottom: 5px;">▼ Live Spieler</div>
-                <div id="content-players" class="legend-section" style="margin-bottom: 0;">
-                    <div id="player-list" style="font-size: 13px; color: #aaa;">Warte auf GPS-Daten...</div>
-                </div>
-            </div>
-        </div>
-
-        <div id="sidebar-right">
-            <h3>Live Statistiken</h3>
-            <p style="color: #aaa; font-size: 14px; margin-bottom: 20px;">Anzahl der besetzten Zonen</p>
-            
-            <div class="stat-box rot"><span>Team Rot</span> <span class="stat-number" id="stat-rot">0</span></div>
-            <div class="stat-box blau"><span>Team Blau</span> <span class="stat-number" id="stat-blau">0</span></div>
-            <div class="stat-box gruen"><span>Team Grün</span> <span class="stat-number" id="stat-gruen">0</span></div>
-            <div class="stat-box gelb"><span>Team Gelb</span> <span class="stat-number" id="stat-gelb">0</span></div>
-            
-            <p style="color: #888; font-size: 12px; margin-top: 10px;"><b>Linksklick:</b> Umfärben. <b>Rechtsklick:</b> Zone sperren.</p>
-
-            <hr style="border-color: #333; margin: 30px 0;">
-            <h3>🎙 Game Master Tools</h3>
-            
-            <label style="font-size: 13px; color: #ccc;">Timer setzen (Minuten):</label>
-            <div style="display:flex; gap:5px; margin-bottom: 15px; margin-top: 5px;">
-                <input type="number" id="timer-input" style="width: 60px; background:#333; color:white; border:1px solid #555; padding:5px; border-radius:3px;" value="45">
-                <button onclick="startTimer()" style="padding: 5px 10px; font-size:13px;">Start</button>
-                <button onclick="stopTimer()" style="padding: 5px 10px; font-size:13px; background:#ca2727; color:white;">Stop</button>
-            </div>
-
-            <label style="font-size: 13px; color: #ccc;">Rundfunk (An alle):</label>
-            <div style="display:flex; gap:5px; margin-bottom: 15px; margin-top: 5px;">
-                <input type="text" id="announcement-input" style="flex:1; background:#333; color:white; border:1px solid #555; padding:5px; border-radius:3px;" placeholder="Letzte 10 Minuten!">
-                <button onclick="sendAnnouncement()" style="padding: 5px 10px; font-size:13px;">Senden</button>
-            </div>
-
-            <hr style="border-color: #333; margin: 30px 0;">
-            <h3>⚙️ Admin Kontrolle</h3>
-            <p style="color: #888; font-size: 12px;">Steuere hier, was die Spieler auf ihren Handys sehen dürfen.</p>
-            <label class="toggle-label" style="color: white; font-size: 15px;">
-                <input type="checkbox" id="global-radar-toggle" onchange="saveZones()"> 📡 Live-Standorte (Radar)
-            </label>
-            
-            <label class="toggle-label" style="color: #00ffcc; font-size: 15px; margin-top: 10px;">
-                <input type="checkbox" id="global-shop-toggle" onchange="saveZones()" checked> 🛒 Shop & Coins aktiv
-            </label>
-
-            <label class="toggle-label" style="color: #ff4444; font-size: 15px; margin-top: 15px; font-weight: bold;">
-                <input type="checkbox" id="global-freeze-toggle" onchange="toggleGameFreeze()"> 🛑 Spiel pausieren (NFCs aus)
-            </label>
-            <label style="color:white; cursor:pointer; display:block; margin-top:10px;">
-                <input type="checkbox" id="global-gps-toggle" onchange="saveZones()" checked> 📍 GPS-Zwang (Anti-Cheat) aktivieren
-            </label>
-
-            <hr style="border-color: #333; margin: 20px 0;">
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
-            <input type="number" id="cd-rot" value="5" min="0" onchange="saveZones()" 
-                style="background-color: #ff3333; color: white; border: none; border-radius: 6px; padding: 10px; text-align: center; font-weight: bold; font-size: 16px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.4); width: 100%; box-sizing: border-box;">
-            
-            <input type="number" id="cd-blau" value="5" min="0" onchange="saveZones()" 
-                style="background-color: #3366ff; color: white; border: none; border-radius: 6px; padding: 10px; text-align: center; font-weight: bold; font-size: 16px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.4); width: 100%; box-sizing: border-box;">
-            
-            <input type="number" id="cd-gruen" value="5" min="0" onchange="saveZones()" 
-                style="background-color: #33ff33; color: black; border: none; border-radius: 6px; padding: 10px; text-align: center; font-weight: bold; font-size: 16px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.4); width: 100%; box-sizing: border-box;">
-            
-            <input type="number" id="cd-gelb" value="5" min="0" onchange="saveZones()" 
-                style="background-color: #ffcc00; color: black; border: none; border-radius: 6px; padding: 10px; text-align: center; font-weight: bold; font-size: 16px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.4); width: 100%; box-sizing: border-box;">
-        </div>
-        <div id="admin-cooldown-panel" style="background: #222; padding: 15px; border-radius: 8px; margin-top: 15px;">
-            <h4>⏳ Live Spieler-Cooldowns</h4>
-            <div id="cooldown-live-view">Lade Daten...</div>
-            
-            <button onclick="resetAllCooldowns()" style="width: 100%; padding: 10px; background: #00ffcc; color: #000; border: none; border-radius: 5px; margin-top: 15px; font-weight: bold; cursor: pointer;">
-                🔄 Alle aktiven Cooldowns sofort beenden
-            </button>
-        </div>
-
-        <label style="font-size: 13px; color: #ccc; display:block; margin-top:15px;">🏦 Bank-Verwaltung (Live):</label>
-            <label style="font-size: 13px; color: #ccc; display:block; margin-top:10px;">Coin-Ausschüttung (alle X Min):</label>
-            <div style="display:flex; gap:5px; margin-bottom: 15px; margin-top: 5px;">
-                <input type="number" id="payout-interval-input" style="width: 60px; background:#333; color:white; border:1px solid #555; padding:5px; border-radius:3px;" value="45" onchange="saveZones()">
-                <span style="font-size: 12px; color: #888; align-self: center;">Minuten</span>
-            </div>
-        
-            <div style="background: #222; padding: 10px; border-radius: 5px; margin-top: 5px; border: 1px solid #444;">
-                
-                <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 12px; font-weight: bold; background: #111; padding: 8px; border-radius: 4px; border: 1px solid #333;">
-                    <span style="color: #ff3333;">🔴 <span id="admin-coins-rot">0</span></span>
-                    <span style="color: #3366ff;">🔵 <span id="admin-coins-blau">0</span></span>
-                    <span style="color: #33ff33;">🟢 <span id="admin-coins-gruen">0</span></span>
-                    <span style="color: #ffcc00;">🟡 <span id="admin-coins-gelb">0</span></span>
-                </div>
-
-                <div style="display:flex; gap:5px; margin-bottom: 8px;">
-                    <select id="bank-team-select" style="background:#333; color:white; border:1px solid #555; padding:5px; border-radius:3px; flex: 1;">
-                        <option value="rot">🔴 Team Rot</option>
-                        <option value="blau">🔵 Team Blau</option>
-                        <option value="gruen">🟢 Team Grün</option>
-                        <option value="gelb">🟡 Team Gelb</option>
-                    </select>
-                    <input type="number" id="bank-amount" value="10" style="width: 60px; background:#333; color:white; border:1px solid #555; padding:5px; border-radius:3px; text-align: center;">
-                </div>
-                <div style="display:flex; gap:5px;">
-                    <button onclick="manageCoins('add')" style="flex:1; padding: 8px 5px; background:#33ff33; color:black; border:none; border-radius:3px; font-weight:bold; cursor:pointer; font-size:12px;">+ Geben</button>
-                    <button onclick="manageCoins('sub')" style="flex:1; padding: 8px 5px; background:#ff3333; color:white; border:none; border-radius:3px; font-weight:bold; cursor:pointer; font-size:12px;">- Abziehen</button>
-                </div>
-                <button onclick="manageCoins('reset_all')" style="width:100%; margin-top:8px; padding: 8px 5px; background:#f38c05; color:black; border:none; border-radius:3px; font-weight:bold; cursor:pointer; font-size:12px;">💸 Alle Kassen auf 0 setzen</button>
-            </div>
-            <div style="margin-top: 15px; padding-top: 10px; border-top: 1px solid #555;">
-                <button onclick="fetchAndDrawTrails(this)" style="background:#444; color:white; border:1px solid #666; padding:8px; border-radius:5px; width:100%; cursor:pointer; font-weight:bold; font-size:12px;">🗺️ GPS Spuren jetzt laden</button>
-                <label style="font-size: 13px; margin-top:8px; display:block; cursor:pointer;">
-                    <input type="checkbox" id="show-trails-toggle" onchange="toggleTrailsLayer()" checked> 🐾 Spuren anzeigen
-                </label>
-                <button onclick="resetTrails()" style="background:transparent; color:#ff4444; border:none; width:100%; text-align:right; font-size:11px; margin-top:5px; cursor:pointer;">🗑️ Spuren löschen</button>
-            </div>
-        
-        <div style="background:#222; padding:15px; border:1px solid #444; border-radius:8px; margin-top:20px;">
-    <h3 style="color:#ffcc00; margin-top:0;">🎒 Spieler-Inventar verwalten</h3>
-    
-    <select id="admin-inv-team" style="padding:5px; background:#111; color:white; border:1px solid #555;">
-        <option value="rot">Team Rot</option>
-        <option value="blau">Team Blau</option>
-        <option value="gruen">Team Grün</option>
-        <option value="gelb">Team Gelb</option>
-    </select>
-    
-    <select id="admin-inv-player" style="padding:5px; background:#111; color:white; border:1px solid #555;">
-        <option value="1">Spieler 1</option>
-        <option value="2">Spieler 2</option>
-        <option value="3">Spieler 3</option>
-    </select>
-
-    <select id="admin-inv-item" style="padding:5px; background:#111; color:white; border:1px solid #555;">
-<option value="trap">🪤 Falle</option>
-        <option value="buff">⚡ Buff</option>
-        <option value="emp">🔌 EMP</option>
-        <option value="defuse">🛠️ Entschärfen</option>
-        <option value="pickpocket">🕵️ Taschendieb</option>
-        <option value="revive">🚑 Revive</option>
-    </select>
-
-    <input type="number" id="admin-inv-amount" value="1" min="1" style="width:50px; padding:5px; background:#111; color:white; border:1px solid #555;">
-
-    <div style="margin-top:10px;">
-        <button onclick="adminManageInventory('add')" style="background:#33ff33; color:black; border:none; padding:8px 12px; cursor:pointer; font-weight:bold; border-radius:4px;">+ Hinzufügen</button>
-        <button onclick="adminManageInventory('sub')" style="background:#ff3333; color:white; border:none; padding:8px 12px; cursor:pointer; font-weight:bold; border-radius:4px;">- Entfernen</button>
+    <div class="login-box">
+        <h1>DusGame Login</h1>
+        <p>Bitte gib deinen Zugangscode ein:</p>
+        <input type="text" id="codeInput" placeholder="Code eingeben..." autocomplete="off">
+        <button onclick="checkCode()">Spiel beitreten</button>
     </div>
 
-    <button onclick="adminResetAllInventories()" 
-        style="background:#ff3333; color:white; border:1px solid #700; padding:10px 15px; cursor:pointer; font-weight:bold; border-radius:4px; margin-top:10px; width:100%; text-transform:uppercase;">
-    🗑️ Alle Rucksäcke leeren (Reset)
-</button>
-    </div>
-<button onclick="adminResetStats()" style="width:100%; margin-bottom:5px; background:#ff00ff; color:white; border:none; padding:8px; border-radius:4px; cursor:pointer;">📊 Stats Resetten</button>
-<button onclick="adminPushTicket()" style="background:#ffcc00; color:black;">🎟️ Rheinturm Tickets senden</button>
-</div>
+    <div class="footer">
+        <a href="datenschutz.html">Datenschutz</a>
+        <a href="impressum.html">Impressum</a>
     </div>
 
-<div id="controls" class="modern-dock">
-        
-        <button id="dock-toggle-btn" onclick="toggleDock()" title="Menü minimieren/ausklappen">⚙️</button>
+    <script>
+        function checkCode() {
+            // Wandelt die Eingabe in Kleinbuchstaben um und entfernt Leerzeichen
+            const code = document.getElementById('codeInput').value.trim().toLowerCase();
+            
+            // 1. Admin Login
+            if (code === 'admin') {  // Den Code für das Admin-Panel kannst du hier ändern (z.B. 'geheim123')
+                window.location.href = 'admin.html';
+                return;
+            }
+            
+            // 2. Spieler Codes (z.B. rot1, blau2, gruen3)
+            // Hier legst du fest, welcher Code auf welche URL weiterleitet
+            const playerCodes = {
+                'rot1': { team: 'rot', player: 1 },
+                'rot2': { team: 'rot', player: 2 },
+                'rot3': { team: 'rot', player: 3 },
+                'blau1': { team: 'blau', player: 1 },
+                'blau2': { team: 'blau', player: 2 },
+                'blau3': { team: 'blau', player: 3 },
+                'gruen1': { team: 'gruen', player: 1 },
+                'gruen2': { team: 'gruen', player: 2 },
+                'gruen3': { team: 'gruen', player: 3 },
+                'gelb1': { team: 'gelb', player: 1 },
+                'gelb2': { team: 'gelb', player: 2 },
+                'gelb3': { team: 'gelb', player: 3 }
+            };
 
-        <div id="dock-content">
-            <div class="control-group">
-                <span class="group-label">Zone</span>
-                <select id="zoneColor">
-                    <option value="#808080">⚪️ Grau (Neutral)</option>
-                    <option value="#ff3333">🔴 Team Rot</option>
-                    <option value="#3366ff">🔵 Team Blau</option>
-                    <option value="#33ff33">🟢 Team Grün</option>
-                    <option value="#ffcc00">🟡 Team Gelb</option>
-                </select>
-                <select id="zoneLevel">
-                    <option value="1">⭐ Level 1</option>
-                    <option value="2">⭐⭐ Level 2</option>
-                    <option value="3">⭐⭐⭐ Level 3</option>
-                </select>
-            </div>
+            // Wenn der Code in der Liste steht, zum HUD weiterleiten
+            if (playerCodes[code]) {
+                const data = playerCodes[code];
+                window.location.href = `player.html?team=${data.team}&player=${data.player}`;
+                return;
+            }
 
-            <div class="control-divider"></div>
+            // Wenn kein Code passt:
+            alert('Ungültiger Code! Bitte überprüfe deine Eingabe.');
+        }
 
-            <div class="control-group">
-                <span class="group-label">🚉</span>
-                <select id="lineType">
-                    <option value="#0066ff">U-Bahn (Blau)</option>
-                    <option value="#00cc00">Tram (Grün)</option>
-                </select>
-            </div>
+        // Erlaubt es, den Code auch direkt mit der "Enter"-Taste abzusenden
+        document.getElementById('codeInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                checkCode();
+            }
+        });
+    </script>
 
-            <div class="control-divider"></div>
-
-            <div class="control-group">
-                <button onclick="window.location.href='/chat.html'" class="btn-chat">Chat-Zentrale</button>
-            </div>
-        </div>
-
-    </div>
-
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
-    <script src="/socket.io/socket.io.js"></script>
-    <script src="script.js"></script>
 </body>
 </html>
