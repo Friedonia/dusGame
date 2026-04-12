@@ -88,6 +88,9 @@
             <label style="color:white; cursor:pointer; display:block; margin-top:10px;">
                 <input type="checkbox" id="global-gps-toggle" onchange="saveZones()" checked> 📍 GPS-Zwang (Anti-Cheat) aktivieren
             </label>
+            <label style="color:#ff8800; cursor:pointer; display:block; margin-top:10px;">
+                <input type="checkbox" id="global-manual-code-toggle" onchange="saveZones()" checked> ⌨️ Manuelle Code-Eingabe erlauben
+            </label>
 
             <hr style="border-color: #333; margin: 20px 0;">
 
@@ -193,7 +196,6 @@
 <button onclick="adminPushTicket()" style="background:#ffcc00; color:black;">🎟️ Rheinturm Tickets senden</button>
 </div>
     </div>
-
 <div id="controls" class="modern-dock">
         
         <button id="dock-toggle-btn" onclick="toggleDock()" title="Menü minimieren/ausklappen">⚙️</button>

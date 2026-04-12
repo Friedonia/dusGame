@@ -72,7 +72,7 @@ if (localStorage.getItem('team')) {
     document.documentElement.style.setProperty('--team-color', teamColors[myTeam]);
     document.documentElement.style.setProperty('--team-color-rgb', teamColorsRgb[myTeam]);
     
-    document.getElementById('hud-header').innerText = `🛡️ Team ${myTeam.toUpperCase()} | Spieler ${myPlayerNum}`;
+    document.getElementById('hud-header').innerText = `Team ${myTeam.toUpperCase()} | Spieler ${myPlayerNum}`;
 
     document.getElementById('team-selector-container').style.display = 'none';
     document.getElementById('player-controls').style.display = 'block';
@@ -87,7 +87,7 @@ window.setTeam = function(t) {
 };
 
 // ==========================================
-// 🚨 EIGENE COOLDOWN-BOX IM DASHBOARD
+// 🚨 SPIELER WECHSSELN
 // ==========================================
 function setupDedicatedCooldownUI() {
     let controls = document.getElementById('player-controls');
@@ -127,7 +127,7 @@ window.changePlayer = function(num) {
     newUrl.searchParams.set('player', num);
     window.history.pushState({}, '', newUrl);
     
-    document.getElementById('hud-header').innerText = `🛡️ Team ${myTeam.toUpperCase()} | Spieler ${num}`;
+    document.getElementById('hud-header').innerText = `Team ${myTeam.toUpperCase()} | Spieler ${num}`;
     setupPlayerSwitcher(); 
 };
 
@@ -298,14 +298,14 @@ function updateMap() {
             document.getElementById('coin-display').style.display = 'block';
         }
 
-if (data.gameSettings && data.gameSettings.cooldownResetTime) {
-    let knownReset = parseInt(localStorage.getItem('knownResetTime')) || 0;
-    // Wir prüfen ab jetzt, ob es ein NEUES Reset-Event vom Admin gab (nicht die pure Uhrzeit des Scans)
-    if (data.gameSettings.cooldownResetTime > knownReset) {
-        localStorage.setItem(`lastScanTime_${myTeam}_${myPlayerNum}`, 0);
-        localStorage.setItem('knownResetTime', data.gameSettings.cooldownResetTime); // Reset markieren!
-    }
-}
+        if (data.gameSettings && data.gameSettings.cooldownResetTime) {
+            let knownReset = parseInt(localStorage.getItem('knownResetTime')) || 0;
+            // Wir prüfen ab jetzt, ob es ein NEUES Reset-Event vom Admin gab (nicht die pure Uhrzeit des Scans)
+            if (data.gameSettings.cooldownResetTime > knownReset) {
+                localStorage.setItem(`lastScanTime_${myTeam}_${myPlayerNum}`, 0);
+                localStorage.setItem('knownResetTime', data.gameSettings.cooldownResetTime); // Reset markieren!
+            }
+        }
 
         if (data.gameSettings && data.gameSettings.teamCooldowns) {
             globalCooldownMins = parseInt(data.gameSettings.teamCooldowns[myTeam]) || 0;
@@ -355,7 +355,22 @@ if (data.gameSettings && data.gameSettings.cooldownResetTime) {
         }).addTo(zoneLayer);
 
         if (data.gameSettings && data.gameSettings.showPlayers === true) fetchPlayers();
-        else playerLayer.clearLayers(); 
+        else playerLayer.clearLayers();
+        // ==========================================
+        // ⌨️ MANUELLE CODE-EINGABE VERSTECKEN/ZEIGEN
+        // ==========================================
+        let manualBox = document.querySelector('.manual-box');
+        let manualText = manualBox ? manualBox.previousElementSibling : null;
+
+        if (data.gameSettings && data.gameSettings.manualCodeEnabled === false) {
+            // Ausblenden, wenn vom Admin verboten
+            if(manualBox) manualBox.style.display = 'none';
+            if(manualText) manualText.style.display = 'none';
+        } else {
+            // Wieder einblenden
+            if(manualBox) manualBox.style.display = 'flex';
+            if(manualText) manualText.style.display = 'block';
+        } 
     }).catch(err => console.error(err)); 
 }
 
@@ -379,18 +394,34 @@ setInterval(() => {
         let now = Date.now();
         let diff = (effectiveCooldownMins * 60000) - (now - lastScan);
         
-        if (diff > 0) {
+if (diff > 0) {
             window.isCooldownActive = true;
             let leftSecs = Math.ceil(diff / 1000);
             let m = Math.floor(leftSecs / 60);
             let s = leftSecs % 60;
             
+            // NEU: Berechne, wie viel Prozent des Cooldowns noch übrig sind
+            let totalSecs = effectiveCooldownMins * 60;
+            let percent = (leftSecs / totalSecs) * 100;
+            
             if(cdBox) {
                 cdBox.style.borderColor = "#ff4444";
-                cdBox.style.background = "rgba(255, 68, 68, 0.1)";
+                cdBox.style.background = "#1a0f0f"; // Sehr dunkles Rot
                 cdBox.style.color = "#ff4444";
-                cdBox.innerHTML = `⏳ SCANNER KÜHLT AB<br><span style="font-size:32px;">${m}:${s < 10 ? '0':''}${s}</span><br>
-                                   <div style="font-size:12px; color:#aaa;">(Team Basis-Cooldown: ${effectiveCooldownMins} Min)</div>`;
+                
+                // NEU: Cooler Ladebalken statt nur Text
+                cdBox.innerHTML = `
+                    <div style="font-size: 13px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px;">
+                        Cooldown aktiv - bitte warten...
+                    </div>
+                    <div style="background: #222; border: 1px solid #444; border-radius: 8px; height: 24px; width: 100%; position: relative; overflow: hidden; box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);">
+                        <div style="position: absolute; top: 0; left: 0; height: 100%; width: ${percent}%; background: linear-gradient(90deg, #aa0000, #ff4444); transition: width 1s linear;"></div>
+                        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; text-align: center; line-height: 24px; color: white; font-size: 16px; font-family: monospace; font-weight: bold; text-shadow: 1px 1px 3px black, 0 0 5px red;">
+                            ${m}:${s < 10 ? '0':''}${s}
+                        </div>
+                    </div>
+                    <div style="font-size:11px; color:#666; margin-top: 5px;">Basis-Abklingzeit: ${effectiveCooldownMins} Min</div>
+                `;
             }
             if(submitBtn) { submitBtn.disabled = true; submitBtn.style.opacity = "0.3"; }
             if(manualInput) { manualInput.disabled = true; }

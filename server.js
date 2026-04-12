@@ -380,18 +380,24 @@ app.get('/api/zones', (req, res) => {
     res.json({ version: mapVersion, data: globalMapData });
 });
 
-app.post('/api/zones', (req, res) => {
-    const geoData = req.body;
-    globalMapData = geoData; 
+// 1. Speichert NUR Admin-Einstellungen (lässt die Map-Features in Ruhe!)
+app.post('/api/admin/settings', (req, res) => {
+    if (!globalMapData.gameSettings) globalMapData.gameSettings = {};
+    Object.assign(globalMapData.gameSettings, req.body);
     triggerMapUpdate();
 
-    if (geoData.gameSettings && geoData.gameSettings.payoutInterval) {
-        const newMins = parseInt(geoData.gameSettings.payoutInterval);
-        if (newMins !== currentPayoutMins) startPayoutLoop(newMins);
+    if (req.body.payoutInterval && req.body.payoutInterval !== currentPayoutMins) {
+        startPayoutLoop(req.body.payoutInterval);
     }
-    res.json({ message: 'Gespeichert' });
+    res.json({ message: 'Settings gespeichert' });
 });
 
+// 2. Speichert NUR Map-Veränderungen (lässt die Einstellungen in Ruhe!)
+app.post('/api/admin/map', (req, res) => {
+    globalMapData.features = req.body.features;
+    triggerMapUpdate();
+    res.json({ message: 'Map gespeichert' });
+});
 // ==========================================
 // 📊 SPIELER-AKTEN & STATISTIKEN 
 // ==========================================
@@ -487,9 +493,16 @@ app.get('/api/zone/:code', (req, res) => {
 });
 
 app.post('/api/zone-action', (req, res) => {
-    const { code, action, newColor, playerLat, playerLng, team, player, cooldownChange, trapsHit } = req.body;
+    const { code, action, newColor, playerLat, playerLng, team, player, cooldownChange, trapsHit, timestamp } = req.body;
+
+    // 🚨 ANTI OFFLINE-BUG: Wenn der Scan älter als 5 Minuten (300.000 ms) ist, werfen wir ihn weg!
+    if (timestamp && (Date.now() - timestamp > 300000)) {
+        console.log(`[Queue] Ignoriere uralten Offline-Scan von Team ${team}`);
+        // noCooldown: true verhindert, dass der Spieler jetzt noch einen Timer bekommt
+        return res.json({ success: true, noCooldown: true, message: "Offline-Scan war zu alt." });
+    }
+
     let zone = globalMapData.features.find(f => f.properties && f.properties.code === code);
-    
     if (!zone) return res.status(404).json({ error: "Zone nicht gefunden" });
     if (zone.properties.locked) return res.status(403).json({ error: "Gesperrt" });
     if (zone.properties.empUntil && zone.properties.empUntil > Date.now()) return res.status(403).json({ error: "EMP!" });

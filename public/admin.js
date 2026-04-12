@@ -507,6 +507,11 @@ function loadZonesFromServer() {
                 gpsToggle.checked = data.gameSettings.gpsRequired;
             }
 
+            let manualToggle = document.getElementById('global-manual-code-toggle');
+            if (manualToggle && data.gameSettings.manualCodeEnabled !== undefined) {
+                manualToggle.checked = data.gameSettings.manualCodeEnabled;
+            }
+
             let payoutInput = document.getElementById('payout-interval-input');
             if (payoutInput && data.gameSettings.payoutInterval !== undefined && document.activeElement !== payoutInput) {
                 payoutInput.value = data.gameSettings.payoutInterval;
@@ -685,13 +690,13 @@ window.adminReviveTeam = function(team) {
 // ==========================================
 // 💾 SPEICHERN & RESET-BEFEHLE
 // ==========================================
-function saveZones() {
-    var geoJsonData = drawnItems.toGeoJSON();
-    
+// 1. Speichert NUR NOCH die Einstellungen der Schalter (Lässt die Map in Ruhe!)
+window.saveZones = function() {
     let toggleRadar = document.getElementById('global-radar-toggle');
     let toggleFreeze = document.getElementById('global-freeze-toggle');
     let toggleShop = document.getElementById('global-shop-toggle');
     let toggleGps = document.getElementById('global-gps-toggle'); 
+    let toggleManual = document.getElementById('global-manual-code-toggle'); 
     let payoutVal = document.getElementById('payout-interval-input');
     
     let cdRot = document.getElementById('cd-rot');
@@ -699,11 +704,12 @@ function saveZones() {
     let cdGruen = document.getElementById('cd-gruen');
     let cdGelb = document.getElementById('cd-gelb');
     
-    geoJsonData.gameSettings = {
+    let settings = {
         showPlayers: toggleRadar ? toggleRadar.checked : false,
         gamePaused: toggleFreeze ? toggleFreeze.checked : false,
         shopEnabled: toggleShop ? toggleShop.checked : true,
         gpsRequired: toggleGps ? toggleGps.checked : true, 
+        manualCodeEnabled: toggleManual ? toggleManual.checked : true,
         endTime: gameEndTime,
         announcement: gameAnnouncement,
         teamCooldowns: {
@@ -716,8 +722,18 @@ function saveZones() {
         cooldownResetTime: window.globalCooldownResetTime || 0
     };
     
-    fetch('/api/zones', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geoJsonData) })
-    .then(res => res.json()).then(data => console.log("Auto-Save erfolgreich!")).catch(err => err);
+    // Sendet nur noch die Settings an die neue Route
+    fetch('/api/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings) })
+    .then(res => res.json()).then(data => console.log("⚙️ Einstellungen gespeichert!")).catch(err => err);
+}
+
+// 2. NEU: Speichert NUR NOCH die Karte, wenn du zeichnest oder umfärbst
+window.saveMapOnly = function() {
+    var geoJsonData = drawnItems.toGeoJSON();
+    
+    // Sendet nur noch die Kartendaten an die neue Route
+    fetch('/api/admin/map', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geoJsonData) })
+    .then(res => res.json()).then(data => console.log("🗺️ Karte gespeichert!")).catch(err => err);
 }
 
 window.resetAllCooldowns = function() {

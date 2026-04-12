@@ -128,8 +128,8 @@ function renderUI(props, gameSettings, inventory, showGpsText = true) {
     let isGray = (props.color === "#808080" || !props.color);
 
     if (props.empUntil && props.empUntil > Date.now()) {
-        messageDiv.innerHTML = `<div style="color:#00ffff; border: 2px solid #00ffff; padding: 15px; border-radius:8px; background:rgba(0,255,255,0.1);">
-            🔌 <b>EMP AKTIV</b><br>Diese Zone wurde durch eine EMP-Granate komplett lahmgelegt. Scanner blockiert!
+        messageDiv.innerHTML = `<div style="color:#00ffff; border: 2px solid #00ffff; padding: 15px; border-radius:12px; background:rgba(0,255,255,0.1); box-shadow: 0 4px 15px rgba(0,255,255,0.2);">
+            🔌 <b style="font-size:16px;">EMP AKTIV</b><br><span style="font-size:13px; color:#aaa;">Diese Zone wurde durch eine EMP-Granate komplett lahmgelegt. Scanner blockiert!</span>
         </div>`;
         returnBtn.style.display = "block";
         return;
@@ -149,8 +149,8 @@ function renderUI(props, gameSettings, inventory, showGpsText = true) {
     let specialHtml = "";
     
     if (props.isKotH) {
-        specialHtml += `<div style="background:#222; border:1px solid #ffcc00; color:#ffcc00; padding:10px; border-radius:8px; margin-bottom:15px; font-weight:bold; text-align:center; box-shadow: 0 0 10px rgba(255, 204, 0, 0.3);">
-            👑 KING OF THE HILL<br><span style="font-size:12px; font-weight:normal; color:#aaa;">Generiert 3x so viele Coins!</span>
+        specialHtml += `<div style="background: linear-gradient(135deg, #332200, #1a1100); border: 2px solid #ffcc00; color:#ffcc00; padding:12px; border-radius:12px; margin-bottom:15px; font-weight:900; text-align:center; box-shadow: 0 4px 15px rgba(255, 204, 0, 0.3); text-transform: uppercase;">
+            👑 KING OF THE HILL<br><span style="font-size:12px; font-weight:normal; color:#ddd; text-transform: none;">Generiert 3x so viele Coins!</span>
         </div>`;
     }
     if (props.hqTeam) {
@@ -158,15 +158,16 @@ function renderUI(props, gameSettings, inventory, showGpsText = true) {
         let hqColor = teamColors[props.hqTeam] || "#fff";
         let armorText = props.hqArmorHit ? "<span style='color:#ff4444; font-size:12px;'>⚠️ Panzerung gebrochen! (Nächster Treffer senkt Level)</span>" : "<span style='color:#aaa; font-size:12px;'>🛡️ Panzerung aktiv (2 Angriffe nötig)</span>";
         
-        specialHtml += `<div style="background:#222; border:1px solid ${hqColor}; color:${hqColor}; padding:10px; border-radius:8px; margin-bottom:15px; font-weight:bold; text-align:center; box-shadow: 0 0 10px ${hqColor};">
+        specialHtml += `<div style="background:#111; border: 2px solid ${hqColor}; color:${hqColor}; padding:12px; border-radius:12px; margin-bottom:15px; font-weight:900; text-align:center; box-shadow: 0 4px 15px ${hqColor}44;">
             🏰 HAUPTQUARTIER ${teamNames[props.hqTeam] || ''}<br>${armorText}
         </div>`;
     }
     uiHtml += specialHtml;
 
+    // 🚨 MINENFELD LOGIK
     if (trapsTriggered > 0) {
         if (inventory && inventory.defuse > 0) {
-            uiHtml += `<div style="color:#ffcc00; font-weight:bold; margin-bottom:15px; border: 1px solid #ffcc00; padding: 10px; border-radius:8px; background:rgba(255,204,0,0.1);">
+            uiHtml += `<div style="color:#ffcc00; font-weight:bold; margin-bottom:15px; border: 1px solid #ffcc00; padding: 12px; border-radius:12px; background:rgba(255,204,0,0.1);">
                 🛠️ ENTSCHÄRFUNGS-KIT EINGESETZT!<br><span style="font-size:12px; color:#ddd;">Du bist in ${trapsTriggered} Falle(n) getreten, aber dein Kit hat sie eliminiert!</span>
             </div>`;
             
@@ -187,25 +188,26 @@ function renderUI(props, gameSettings, inventory, showGpsText = true) {
                 body: JSON.stringify({ team: team, player: myPlayerNum, timestamp: now }) 
             });
             
+            // Mit Offline-Warteschlange für Fallen
+            const trapPayload = { 
+                code: scannedCode, action: 'trigger_items', team: team, player: myPlayerNum, 
+                cooldownChange: trapsTriggered - buffsTriggered, trapsHit: trapsTriggered, timestamp: now 
+            };
+
             fetch('/api/zone-action', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ 
-                    code: scannedCode, 
-                    action: 'trigger_items', 
-                    team: team, 
-                    player: myPlayerNum, 
-                    cooldownChange: trapsTriggered - buffsTriggered, 
-                    trapsHit: trapsTriggered 
-                }) 
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(trapPayload) 
+            }).catch(err => {
+                let queue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+                queue.push(trapPayload);
+                localStorage.setItem('offlineQueue', JSON.stringify(queue));
             });
 
             playFeedback('clump');
-            messageDiv.innerHTML = `<div style="color:#ff4444; border: 2px solid #ff4444; padding: 15px; border-radius:8px; background:rgba(255,0,0,0.1);">
-                💥 MINENFELD AUSGELÖST!<br>
+            messageDiv.innerHTML = `<div style="color:#ff4444; border: 2px solid #ff4444; padding: 15px; border-radius:12px; background:rgba(255,0,0,0.15); box-shadow: inset 0 0 15px rgba(255,0,0,0.3);">
+                💥 <b style="font-size:18px;">MINENFELD AUSGELÖST!</b><br>
                 <span style="font-size:14px; color:#ddd;">Du bist in ${trapsTriggered} Falle(n) getreten. Dein Team hat +${trapsTriggered} Min. Cooldown!</span>
             </div>
-            <p style="font-size:12px; color:#aaa; margin-top:15px;">Automatische Rückkehr...</p>`;
+            <p style="font-size:13px; color:#aaa; margin-top:20px;">Automatische Rückkehr... ⏳</p>`;
             
             setTimeout(() => { returnToHQ(); }, 3500);
             returnBtn.style.display = "none";
@@ -213,54 +215,62 @@ function renderUI(props, gameSettings, inventory, showGpsText = true) {
         }
     } else if (buffsTriggered > 0) {
         fetch('/api/zone-action', { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ code: scannedCode, action: 'trigger_items', team: team, player: myPlayerNum, cooldownChange: -buffsTriggered }) 
         });
-        uiHtml += `<div style="color:#00ffcc; font-weight:bold; margin-bottom:15px; border: 1px solid #00ffcc; padding: 10px; border-radius:8px; background:rgba(0,255,200,0.1);">✨ BUFF GENUTZT (-${buffsTriggered} Min.)</div>`;
+        uiHtml += `<div style="color:#00ffcc; font-weight:bold; margin-bottom:15px; border: 1px solid #00ffcc; padding: 12px; border-radius:12px; background:rgba(0,255,200,0.1);">✨ BUFF GENUTZT (-${buffsTriggered} Min.)</div>`;
     }
 
-    if(showGpsText) uiHtml += `<div style="text-align:center; margin-bottom:10px; color:#00ccff; font-size:12px;">📍 GPS verifiziert.</div>`;
+    if(showGpsText) uiHtml += `<div style="text-align:center; margin-bottom:15px; color:#00ccff; font-size:12px; letter-spacing: 1px;">📍 GPS VERIFIZIERT</div>`;
 
-    uiHtml += `<h3 style="color:#aaa; font-size:14px; text-transform:uppercase;">Wähle deine Aktion:</h3>`;
+    uiHtml += `<h3 style="color:#aaa; font-size:12px; text-transform:uppercase; letter-spacing: 1px; margin-bottom: 10px;">Aktion wählen:</h3>`;
     
+    // Moderne Action-Buttons
+    const mainBtnStyle = "width:100%; padding:18px; margin-bottom:15px; border:none; border-radius:12px; font-weight:900; font-size:16px; cursor:pointer; box-shadow:0 4px 15px rgba(0,0,0,0.3); text-transform:uppercase;";
+
     if (props.color === newColor) {
-        if (props.level < 3) uiHtml += `<button onclick="executeAction('upgrade')" class="btn" style="background:#3366ff; color:white;">🛡️ Verstärken (Lvl ${props.level} ➔ ${props.level + 1})</button>`;
-        else uiHtml += `<p style="color:#33ff33; font-weight:bold; background:#111; padding:10px; border-radius:8px;">✅ Maximales Level (3) erreicht.</p>`;
+        if (props.level < 3) {
+            uiHtml += `<button onclick="executeAction('upgrade')" class="btn" style="${mainBtnStyle} background:linear-gradient(135deg, #3366ff, #6699ff); color:white;">🛡️ Verstärken (Lvl ${props.level} ➔ ${props.level + 1})</button>`;
+        } else {
+            uiHtml += `<div style="color:#33ff33; font-weight:bold; background:#1a2b1a; padding:15px; border-radius:12px; border:1px solid #33ff33; margin-bottom:15px;">✅ Maximales Level (3) erreicht.</div>`;
+        }
     } else if (isGray) {
-        uiHtml += `<button onclick="executeAction('capture')" class="btn" style="background:#33ff33; color:black;">🎯 Zone Einnehmen</button>`;
+        uiHtml += `<button onclick="executeAction('capture')" class="btn" style="${mainBtnStyle} background:linear-gradient(135deg, #33ff33, #88ff88); color:#000;">🎯 Zone Einnehmen</button>`;
     } else {
-        uiHtml += `<button onclick="executeAction('attack')" class="btn" style="background:#ff3333; color:white;">⚔️ Angreifen (Gegner Lvl ${props.level})</button>`;
+        uiHtml += `<button onclick="executeAction('attack')" class="btn" style="${mainBtnStyle} background:linear-gradient(135deg, #ff3333, #ff7777); color:white;">⚔️ Angreifen (Gegner Lvl ${props.level})</button>`;
     }
 
+    // Inventar Section
     if (gameSettings.shopEnabled !== false) {
-        uiHtml += `<div id="inventory-section" style="margin-top:20px; text-align:center; color:#aaa;"><i>Durchsuche Rucksack... 🎒</i></div>`;
+        uiHtml += `<div id="inventory-section" style="margin-top:25px; text-align:center; color:#888; font-size:13px;"><i>Durchsuche Rucksack... 🎒</i></div>`;
         
         fetch(`/api/inventory?team=${team}&player=${myPlayerNum}`)
         .then(res => res.json())
         .then(inv => {
-            let invHtml = `<h3 style="color:#aaa; font-size:14px; text-transform:uppercase; text-align:left;">🎒 Aus dem Rucksack:</h3>`;
+            let invHtml = `<h3 style="color:#aaa; font-size:12px; text-transform:uppercase; text-align:left; letter-spacing: 1px; border-top: 1px solid #333; padding-top: 15px;">🎒 Aus dem Rucksack:</h3>`;
             
-            const btn = (id, name, color, count) => {
-                if(count > 0) return `<button onclick="useItemLocal('${id}')" class="btn" style="background:${color}; color:${id==='buff'?'black':'white'}; margin-bottom:8px;">${name} (${count})</button>`;
+            const invBtnStyle = "width:100%; padding:14px; margin-bottom:10px; border:none; border-radius:10px; font-weight:bold; font-size:14px; cursor:pointer; box-shadow:0 2px 10px rgba(0,0,0,0.2);";
+            
+            const btn = (id, name, color1, color2, isDarkText, count) => {
+                if(count > 0) return `<button onclick="useItemLocal('${id}')" class="btn" style="${invBtnStyle} background:linear-gradient(135deg, ${color1}, ${color2}); color:${isDarkText ? '#000' : '#fff'};">${name} (${count})</button>`;
                 return '';
             };
 
             if (props.color === newColor) {
-                invHtml += btn('buff', '⚡ Buff platzieren', '#00ffcc', inv.buff);
+                invHtml += btn('buff', '⚡ Buff platzieren', '#00ffcc', '#ccffff', true, inv.buff);
                 if(!inv.buff) invHtml += `<p style="font-size: 13px; color:#666;">Keine passenden Items im Rucksack.</p>`;
             } 
             else {
-                invHtml += btn('trap', '🪤 Falle legen', '#ff8800', inv.trap);
-                invHtml += btn('drohne', '🚁 Drohne (Scannen)', '#0088ff', inv.drohne);
-                invHtml += btn('emp', '⚡ EMP werfen', '#ff3333', inv.emp);
+                invHtml += btn('trap', '🪤 Falle legen', '#ff8800', '#ffcc88', true, inv.trap);
+                invHtml += btn('drohne', '🚁 Drohne (Scannen)', '#0088ff', '#88ccff', false, inv.drohne);
+                invHtml += btn('emp', '⚡ EMP werfen', '#ff3333', '#ff8888', false, inv.emp);
 
                 let passiveText = [];
                 if (inv.defuse > 0) passiveText.push(`✂️ ${inv.defuse}x Entschärfer`);
                 if (!isGray && inv.pickpocket > 0) passiveText.push(`🕵️‍♂️ ${inv.pickpocket}x Dieb`);
 
                 if (passiveText.length > 0) {
-                    invHtml += `<div style="font-size: 13px; color:#aaa; margin-top:12px; background:#222; padding:8px; border-radius:5px;">
+                    invHtml += `<div style="font-size: 13px; color:#aaa; margin-top:12px; background:#1a1a1a; padding:10px; border-radius:8px; border: 1px solid #333;">
                         🛡️ <b>Passive Items aktiv:</b><br>${passiveText.join(' | ')}
                     </div>`;
                 }
@@ -294,8 +304,7 @@ function registerScanToServer() {
 
 window.executeAction = function(actionType) {
     const newColor = teamColors[team];
-    const payload = { code: scannedCode, action: actionType, newColor: newColor, playerLat: currentLat, playerLng: currentLng, team: team, player: myPlayerNum };
-
+    const payload = { code: scannedCode, action: actionType, newColor: newColor, playerLat: currentLat, playerLng: currentLng, team: team, player: myPlayerNum, timestamp: Date.now() };
     fetch('/api/zone-action', { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
