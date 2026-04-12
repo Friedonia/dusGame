@@ -380,23 +380,27 @@ app.get('/api/zones', (req, res) => {
     res.json({ version: mapVersion, data: globalMapData });
 });
 
-// 1. Speichert NUR Admin-Einstellungen (lässt die Map-Features in Ruhe!)
+// 1. Speichert NUR Admin-Einstellungen
 app.post('/api/admin/settings', (req, res) => {
     if (!globalMapData.gameSettings) globalMapData.gameSettings = {};
     Object.assign(globalMapData.gameSettings, req.body);
-    triggerMapUpdate();
-
-    if (req.body.payoutInterval && req.body.payoutInterval !== currentPayoutMins) {
-        startPayoutLoop(req.body.payoutInterval);
-    }
-    res.json({ message: 'Settings gespeichert' });
+    
+    // 🚨 WICHTIG: In der Datenbank speichern!
+    db.prepare('REPLACE INTO game_data (key, value) VALUES (?, ?)').run('map_data', JSON.stringify(globalMapData));
+    
+    io.emit('update_map'); // Alle Clients benachrichtigen
+    res.json({ success: true });
 });
 
-// 2. Speichert NUR Map-Veränderungen (lässt die Einstellungen in Ruhe!)
+// 2. Speichert NUR Map-Veränderungen
 app.post('/api/admin/map', (req, res) => {
     globalMapData.features = req.body.features;
-    triggerMapUpdate();
-    res.json({ message: 'Map gespeichert' });
+    
+    // 🚨 WICHTIG: In der Datenbank speichern!
+    db.prepare('REPLACE INTO game_data (key, value) VALUES (?, ?)').run('map_data', JSON.stringify(globalMapData));
+    
+    io.emit('update_map');
+    res.json({ success: true });
 });
 // ==========================================
 // 📊 SPIELER-AKTEN & STATISTIKEN 

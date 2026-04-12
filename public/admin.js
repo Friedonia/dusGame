@@ -83,7 +83,8 @@ window.toggleGameFreeze = function() {
     } else {
         alert("✅ Spiel wieder freigegeben. Du musst die NFC-Tags jetzt manuell wieder einschalten.");
     }
-    saveZones();
+    saveMapOnly(); // 🚨 FIX: Map hat sich geändert
+    saveZones();   // 🚨 FIX: Einstellung hat sich geändert
 }
 
 function toggleDock() {
@@ -270,7 +271,7 @@ window.updateZoneSpecial = function(code) {
                 applyZoneStyle(layer);
             }
         });
-        saveZones();
+        saveMapOnly(); // 🚨 FIX
     });
 };
 
@@ -280,7 +281,7 @@ window.removeZoneItem = function(code) {
             delete layer.feature.properties.buffs;
             delete layer.feature.properties.traps;
             delete layer.feature.properties.empUntil;
-            saveZones(); 
+            saveMapOnly(); // 🚨 FIX
             if (layer.getPopup()) {
                 layer.setPopupContent(generateZonePopupContent(layer.feature.properties)); 
             }
@@ -302,7 +303,7 @@ window.resetAllItems = function() {
             }
         });
         if (changed) {
-            saveZones();
+            saveMapOnly(); // 🚨 FIX
             alert("✅ Alle Shop-Items (Buffs/Fallen/EMPs) wurden von der Karte entfernt!");
         } else {
             alert("ℹ️ Es gab keine aktiven Items.");
@@ -318,7 +319,7 @@ window.toggleZoneLock = function(code) {
             applyZoneStyle(layer);
             
             if (layer.getPopup()) layer.setPopupContent(generateZonePopupContent(props));
-            saveZones();
+            saveMapOnly(); // 🚨 FIX
         }
     });
 };
@@ -349,7 +350,7 @@ window.updateTagVisibility = function(tagId, isVisible) {
         if (layer.feature && layer.feature.properties && layer.feature.properties.tagId === tagId) {
             layer.feature.properties.visibleToPlayers = isVisible; 
             layer.setIcon(getNfcIcon(isVisible)); 
-            saveZones(); 
+            saveMapOnly(); // 🚨 FIX
             layer.setPopupContent(generateNfcPopupContent(layer.feature.properties));
         }
     });
@@ -381,7 +382,7 @@ function makeEditable(layer) {
         layer.setStyle({fillOpacity: 0.9});
         setTimeout(() => applyZoneStyle(layer), 200);
         
-        saveZones();
+        saveMapOnly(); // 🚨 FIX
         updateStatistics();
     });
 
@@ -451,12 +452,12 @@ map.on(L.Draw.Event.CREATED, function (event) {
         bindNfcPopup(layer);
     }
     updateStatistics(); 
-    saveZones();
+    saveMapOnly(); // 🚨 FIX
     applyAllLegendFilters(); 
 });
 
-map.on(L.Draw.Event.EDITED, saveZones);
-map.on(L.Draw.Event.DELETED, function (e) { saveZones(); updateStatistics(); });
+map.on(L.Draw.Event.EDITED, window.saveMapOnly); // 🚨 FIX
+map.on(L.Draw.Event.DELETED, function (e) { saveMapOnly(); updateStatistics(); }); // 🚨 FIX
 
 // ==========================================
 // 🛑 ZUSTAND FÜR DEN ZEICHEN-MODUS
@@ -555,7 +556,7 @@ function loadZonesFromServer() {
             updateStatistics();
             applyAllLegendFilters(); 
             
-            if (needsSave) setTimeout(saveZones, 1000);
+            if (needsSave) setTimeout(window.saveMapOnly, 1000); // 🚨 FIX
         }
     }).catch(err => console.log("Live-Update fehlgeschlagen:", err));
 }
@@ -722,7 +723,6 @@ window.saveZones = function() {
         cooldownResetTime: window.globalCooldownResetTime || 0
     };
     
-    // Sendet nur noch die Settings an die neue Route
     fetch('/api/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings) })
     .then(res => res.json()).then(data => console.log("⚙️ Einstellungen gespeichert!")).catch(err => err);
 }
@@ -731,7 +731,14 @@ window.saveZones = function() {
 window.saveMapOnly = function() {
     var geoJsonData = drawnItems.toGeoJSON();
     
-    // Sendet nur noch die Kartendaten an die neue Route
+    // 🛡️ SICHERHEITSSPERRE: Blockiert das Überschreiben einer leeren Karte (außer bestätigt)
+    if (geoJsonData.features.length === 0) {
+        if(!window.confirm("Achtung: Die Karte scheint komplett leer zu sein. Möchtest du wirklich alle Zonen löschen?")) {
+            console.warn("Speichern einer leeren Karte wurde verhindert.");
+            return;
+        }
+    }
+    
     fetch('/api/admin/map', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geoJsonData) })
     .then(res => res.json()).then(data => console.log("🗺️ Karte gespeichert!")).catch(err => err);
 }
@@ -928,7 +935,7 @@ fetchAdminCooldowns(); // Einmalig am Start
 socket.on('update_map', () => loadZonesFromServer());
 socket.on('update_locations', () => updateLiveLocations());
 socket.on('update_coins', () => updateAdminCoins());
-socket.on('update_stats', () => fetchAdminCooldowns()); // Cooldowns & Stats haben sich geändert
+socket.on('update_stats', () => fetchAdminCooldowns()); 
 
 window.adminPushTicket = function() {
     let msg = prompt("Nachricht an die Agenten:", "MISSION ERFÜLLT! 🗼\nZeigt diesen persönlichen QR-Code am Einlass des Rheinturms vor.");
@@ -947,47 +954,6 @@ window.adminPushTicket = function() {
     }
 };
 
-socket.on('show_ticket', (data) => {
-    // Falls noch ein altes Overlay offen ist
-    let existingTicket = document.getElementById('final-ticket-overlay');
-    if (existingTicket) existingTicket.remove();
-
-    // Wir fragen den Tresor über die sichere Route ab!
-    let secureTicketUrl = `/api/ticket/${myTeam}/${myPlayerNum}`;
-
-    let overlay = document.createElement('div');
-    overlay.id = 'final-ticket-overlay';
-    overlay.style.cssText = `
-        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-        background: rgba(0, 0, 0, 0.95); z-index: 99999;
-        display: flex; flex-direction: column; justify-content: center; align-items: center;
-        color: #00ffcc; font-family: monospace; text-align: center; padding: 20px;
-        box-sizing: border-box; backdrop-filter: blur(5px);
-    `;
-
-    overlay.innerHTML = `
-        <h1 style="color: #ffcc00; text-transform: uppercase; text-shadow: 0 0 10px #ffcc00; animation: pulse 2s infinite;">
-            🎉 EVAKUIERUNG ERFOLGREICH 🎉
-        </h1>
-        <p style="font-size: 16px; color: white; margin-bottom: 20px; white-space: pre-wrap;">${data.message}</p>
-        
-        <div style="background: white; padding: 15px; border-radius: 10px; box-shadow: 0 0 20px ${teamColors[myTeam]};">
-            <img src="${secureTicketUrl}" alt="Dein persönliches Ticket" style="width: 250px; height: 250px; display: block; object-fit: contain;">
-        </div>
-        
-        <p style="margin-top: 15px; color: #888; font-size: 14px;">AGENT-ID: <strong style="color:${teamColors[myTeam]}">${myTeam.toUpperCase()} ${myPlayerNum}</strong></p>
-        <p style="margin-top: 5px; color: #888; font-size: 12px;">Bitte Helligkeit des Displays erhöhen beim Scannen!</p>
-        
-        <button onclick="document.getElementById('final-ticket-overlay').remove()" 
-                style="margin-top: 30px; background: #333; color: white; border: 1px solid #666; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
-            Ticket schließen
-        </button>
-    `;
-
-    document.body.appendChild(overlay);
-    
-    if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 500]);
-});
 
 // ==========================================
 // ⏳ LOKALES COOLDOWN TICKING (Ressourcen-schonend!)
