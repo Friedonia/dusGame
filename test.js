@@ -6,7 +6,10 @@ let passed = 0, failed = 0;
 console.log("🚀 Starte Sandbox-Server...");
 
 const serverProcess = spawn('node', ['server.js'], { env: { ...process.env, TEST_MODE: 'true' } });
-serverProcess.stderr.on('data', (d) => console.error(`[Server]: ${d}`));
+serverProcess.stderr.on('data', (d) => {
+    // Unterdrücke EADDRINUSE Spam, wir fangen das unten sauber ab
+    if (!d.toString().includes('EADDRINUSE')) console.error(`[Server]: ${d}`);
+});
 
 setTimeout(async () => { await runTests(); serverProcess.kill(); process.exit(failed > 0 ? 1 : 0); }, 2000);
 
@@ -20,7 +23,15 @@ async function runTests() {
     console.log("\n🔍 STARTE 55-PHASEN STRESSTEST...\n");
 
     let map = await fetchJSON('/api/zones?v=0');
-    assert("0. Server Online", map.data, "Keine Map");
+    
+    // 🚨 FIX: Verhindert den Absturz, wenn der Server blockiert oder die Map leer ist!
+    if (!map.data || !map.data.features || map.data.features.length < 2) {
+        console.log("❌ KRITISCHER FEHLER: Port 3000 ist blockiert oder es gibt keine 2 Zonen!");
+        console.log("👉 Tippe 'killall node' in dein Terminal und versuche es erneut.");
+        process.exit(1);
+    }
+
+    assert("0. Server Online", true, "Keine Map");
     let z = map.data.features.filter(f => f.properties.type === 'zone');
     let z1 = z[0].properties.code, z2 = z[1].properties.code;
 
@@ -112,13 +123,12 @@ async function runTests() {
 
     console.log("\n--- [9] DIE NEUEN 25 HÄRTE-TESTS ---");
     
-    // Wirtschaft & Edge Cases
     await fetchJSON('/api/coins/manage', 'POST', { team: 'gruen', amount: 0, action: 'set' });
-    await fetchJSON('/api/coins/manage', 'POST', { team: 'gruen', amount: 30, action: 'add' }); // Exakt 30 Coins
+    await fetchJSON('/api/coins/manage', 'POST', { team: 'gruen', amount: 30, action: 'add' }); 
     assert("30. Exaktes Kaufen (Geld = Preis) funktioniert", (await fetchJSON('/api/shop/buy', 'POST', {team:'gruen', player:'1', itemType:'trap'})).success === true);
     
     await fetchJSON('/api/coins/manage', 'POST', { team: 'gelb', amount: 0, action: 'set' });
-    await fetchJSON('/api/zone-action', 'POST', {code:z1, action:'capture', team:'gelb', player:'1', newColor:'#ffcc00'}); // Gelb hat z1, aber 0 Coins
+    await fetchJSON('/api/zone-action', 'POST', {code:z1, action:'capture', team:'gelb', player:'1', newColor:'#ffcc00'}); 
     await fetchJSON('/api/inventory/manage', 'POST', {team:'blau', player:'1', itemType:'pickpocket', amount:1, action:'set'});
     let poorSteal = await fetchJSON('/api/zone-action', 'POST', {code:z1, action:'capture', team:'blau', player:'1', newColor:'#3366ff'});
     assert("31. Taschendieb stürzt bei pleite-Team (0 Coins) nicht ab", poorSteal.success === true && poorSteal.stealMessage === undefined);
@@ -126,9 +136,8 @@ async function runTests() {
     await fetchJSON('/api/inventory/manage', 'POST', {team:'rot', player:'1', itemType:'trap', amount:"ABC", action:'set'});
     assert("32. Admin String-Injection beim Inventar wird zu 1", (await fetchJSON('/api/inventory?team=rot&player=1')).data.trap === 1);
 
-    // GPS Anti-Cheat
     await fetchJSON('/api/location', 'POST', { id: 'test', lat: 51.0, lng: 6.0, team: 'rot', name: 'bot' });
-    let jump = await fetchJSON('/api/location', 'POST', { id: 'test', lat: 51.5, lng: 6.5, team: 'rot', name: 'bot' }); // 70km in ms
+    let jump = await fetchJSON('/api/location', 'POST', { id: 'test', lat: 51.5, lng: 6.5, team: 'rot', name: 'bot' }); 
     assert("33. GPS Teleport (Spoofing > 12m/s) wird blockiert", jump.status === "Ignored (Jump)");
     
     await fetchJSON('/api/admin/settings', 'POST', { gpsRequired: true });
@@ -140,12 +149,11 @@ async function runTests() {
     assert("35. Manual Mode ignoriert Distanz (Scan erlaubt)", manualScan.success === true || manualScan.error !== "Zu weit weg!");
 
     let t1 = await fetchJSON('/api/location', 'POST', { id: 'test2', lat: 51.22, lng: 6.77, team: 'rot', name: 'bot' });
-    let t2 = await fetchJSON('/api/location', 'POST', { id: 'test2', lat: 51.22001, lng: 6.77001, team: 'rot', name: 'bot' }); // Minimale Bewegung
+    let t2 = await fetchJSON('/api/location', 'POST', { id: 'test2', lat: 51.22001, lng: 6.77001, team: 'rot', name: 'bot' }); 
     assert("36. Micro-Movements (unter 5m) müllen die Trails nicht voll", (await fetchJSON('/api/trails')).test2.path.length === 1);
 
-    // Zonen-Logik Hardcore
     await fetchJSON('/api/zone-action', 'POST', {code:z2, action:'capture', team:'blau', player:'1', newColor:'#3366ff'});
-    await fetchJSON('/api/zone-action', 'POST', {code:z2, action:'attack', team:'rot', player:'1'}); // Level 1 -> 0
+    await fetchJSON('/api/zone-action', 'POST', {code:z2, action:'attack', team:'rot', player:'1'}); 
     let mapCheck = await fetchJSON('/api/zones?v=0');
     let deadZone = mapCheck.data.features.find(f => f.properties.code === z2);
     assert("37. Zerstörte Zone wechselt Farbe zwingend auf Grau", deadZone.properties.color === "#808080");
@@ -155,15 +163,14 @@ async function runTests() {
     assert("38. Falle auf Graue Zone legen klappt (Überraschungsangriff)", grayTrap.success === true);
 
     await fetchJSON('/api/zone-action', 'POST', {code:z2, action:'capture', team:'blau', player:'1', newColor:'#3366ff'});
-    await fetchJSON('/api/zone-action', 'POST', {code:z2, action:'attack', team:'rot', player:'1'}); // Wieder Grau machen
+    await fetchJSON('/api/zone-action', 'POST', {code:z2, action:'attack', team:'rot', player:'1'}); 
     let mapCheck2 = await fetchJSON('/api/zones?v=0');
     assert("39. Zerstörte Zone verliert alle Buffs und Fallen restlos", mapCheck2.data.features.find(f => f.properties.code === z2).properties.traps === undefined);
 
     let fakeTeam = await fetchJSON('/api/zone-action', 'POST', {code:z2, action:'capture', team:'lila', player:'1', newColor:'#ff00ff'});
     assert("40. Server crasht nicht bei unbekanntem Team (Injection)", fakeTeam.success === true || fakeTeam.error !== undefined);
 
-    // Stats & Server Tools
-    await fetchJSON('/api/player-scan', 'POST', { team: 'rot', player: '1', timestamp: Date.now() }); // Hack Counter +1
+    await fetchJSON('/api/player-scan', 'POST', { team: 'rot', player: '1', timestamp: Date.now() }); 
     await fetchJSON('/api/admin/reset-stats', 'POST');
     let stats = await fetchJSON('/api/stats?team=rot&player=1');
     assert("41. Admin Reset-Stats löscht persönliche Hacks/KM", stats.personal.hacks === 0 && stats.personal.distance === "0.00");
@@ -178,10 +185,9 @@ async function runTests() {
     await fetchJSON('/api/zone-action', 'POST', {code:z1, action:'trigger_items', team:'rot', cooldownChange: 2});
     assert("44. In Falle treten modifiziert den Team-Cooldown in den Settings", (await fetchJSON('/api/admin/cooldown-states?t=0')).durations.rot > 5);
 
-    // Payout Logic Check
     await fetchJSON('/api/admin/settings', 'POST', { shopEnabled: false });
     let coinsBefore = (await fetchJSON('/api/coins?v=0')).data.blau;
-    await new Promise(r => setTimeout(r, 100)); // Payout wird im Background blockiert wenn Shop aus ist
+    await new Promise(r => setTimeout(r, 100)); 
     let coinsAfter = (await fetchJSON('/api/coins?v=0')).data.blau;
     assert("45. Economy Payout stoppt sofort wenn Shop gesperrt wird", coinsBefore === coinsAfter);
 

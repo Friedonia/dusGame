@@ -725,6 +725,7 @@ window.startGPS = function() {
     const statusDiv = document.getElementById('status');
     if ("geolocation" in navigator) {
         if(statusDiv) statusDiv.innerText = "GPS wird gesucht...";
+        
         navigator.geolocation.watchPosition((position) => {
             
             if(statusDiv) {
@@ -733,36 +734,38 @@ window.startGPS = function() {
             }
             
             if (myLocationMarker) map.removeLayer(myLocationMarker);
-            myLocationMarker = L.circleMarker([position.coords.latitude, position.coords.longitude], { radius: 8, fillColor: "#00ccff", color: "#ffffff", weight: 3, fillOpacity: 1 }).addTo(map);
+            myLocationMarker = L.circleMarker([position.coords.latitude, position.coords.longitude], { 
+                radius: 8, 
+                fillColor: "#00ccff", 
+                color: "#ffffff", 
+                weight: 3, 
+                fillOpacity: 1 
+            }).addTo(map);
             
-            fetch('/api/location', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: playerId, name: playerId, team: myTeam, lat: position.coords.latitude, lng: position.coords.longitude }) }).catch(e => e);
+            fetch('/api/location', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ 
+                    id: playerId, 
+                    name: playerId, 
+                    team: myTeam, 
+                    lat: position.coords.latitude, 
+                    lng: position.coords.longitude 
+                }) 
+            }).catch(e => e);
+
         }, (e) => { 
-            if(statusDiv) statusDiv.innerText = "❌ Fehler: Bitte GPS erlauben!"; 
-        }, { enableHighAccuracy: true });
-    }
-}
-
-window.submitManualCode = function() {
-    playFeedback('uium');
-    const inputField = document.getElementById('manual-code-input');
-    let rawCode = inputField.value.trim().toUpperCase(); 
-    if (!rawCode) { alert("Bitte gib einen Code ein!"); return; }
-    
-    window.location.href = `/scan.html?code=${encodeURIComponent(rawCode)}&player=${myPlayerNum}`;
-}
-
-let currentCoinsVersion = 0;
-function fetchCoins() {
-    fetch('/api/coins?v=' + currentCoinsVersion)
-        .then(res => res.json())
-        .then(response => {
-            if (response.unchanged) return;
-            currentCoinsVersion = response.version;
-            let coins = response.data;
-            if(coins[myTeam] !== undefined) {
-                document.getElementById('team-coins-val').innerText = coins[myTeam];
+            if(statusDiv) {
+                // Zeigt den genauen Fehlercode in der Konsole an (hilfreich beim Testen)
+                console.error("GPS Fehler Code:", e.code, "Nachricht:", e.message);
+                statusDiv.innerText = "❌ Fehler: Bitte GPS erlauben!"; 
             }
-        }).catch(err => err);
+        }, { 
+            enableHighAccuracy: true, 
+            timeout: 15000,    // <--- HIER: 15 Sekunden Zeit geben
+            maximumAge: 0      // <--- HIER: Erzwingt einen frischen Standort
+        });
+    }
 }
 
 

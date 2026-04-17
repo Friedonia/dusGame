@@ -370,6 +370,10 @@ app.post('/api/inventory/reset-all', (req, res) => {
 // ==========================================
 // 👑 ADMIN & MAP 
 // ==========================================
+// ==========================================
+// 👑 ADMIN & MAP (KORRIGIERTE VERSION)
+// ==========================================
+
 app.post('/api/admin/set-zone-special', (req, res) => {
     const { code, isKotH, hqTeam } = req.body;
     let zone = globalMapData.features.find(f => f.properties && f.properties.code === code);
@@ -384,6 +388,36 @@ app.post('/api/admin/set-zone-special', (req, res) => {
             globalMapData.gameSettings.fallenTeams[hqTeam] = false;
         }
     }
+    // Speichern und alle Spieler sofort benachrichtigen
+    saveData('zones', globalMapData); 
+    triggerMapUpdate(); 
+    res.json({ success: true });
+});
+
+// 1. Speichert Admin-Einstellungen (Radar, Shop, Cooldowns)
+app.post('/api/admin/settings', (req, res) => {
+    if (!globalMapData.gameSettings) globalMapData.gameSettings = {};
+    Object.assign(globalMapData.gameSettings, req.body);
+    
+    // 🚨 FIX: Konsistenter Key 'zones' und sofortiges Speichern
+    saveData('zones', globalMapData);
+    
+    // 🚨 FIX: Spieler müssen wissen, dass sich Settings (z.B. Pause) geändert haben
+    triggerMapUpdate(); 
+    res.json({ success: true });
+});
+
+// 2. Speichert Map-Veränderungen (Neue Zonen, gelöschte Zonen)
+app.post('/api/admin/map', (req, res) => {
+    if (!req.body.features || !Array.isArray(req.body.features)) {
+        return res.status(400).json({ error: "Ungültiges Kartenformat!" });
+    }
+
+    globalMapData.features = req.body.features;
+    
+    // 🚨 FIX: Konsistenter Key 'zones'
+    saveData('zones', globalMapData);
+    
     triggerMapUpdate();
     res.json({ success: true });
 });
@@ -394,20 +428,8 @@ app.get('/api/zones', (req, res) => {
     res.json({ version: mapVersion, data: globalMapData });
 });
 
-app.post('/api/admin/settings', (req, res) => {
-    if (!globalMapData.gameSettings) globalMapData.gameSettings = {};
-    Object.assign(globalMapData.gameSettings, req.body);
-    db.prepare('REPLACE INTO game_data (key, value) VALUES (?, ?)').run('zones', JSON.stringify(globalMapData));
-    io.emit('update_map'); 
-    res.json({ success: true });
-});
 
-app.post('/api/admin/map', (req, res) => {
-    globalMapData.features = req.body.features;
-    db.prepare('REPLACE INTO game_data (key, value) VALUES (?, ?)').run('zones', JSON.stringify(globalMapData));
-    io.emit('update_map');
-    res.json({ success: true });
-});
+
 
 // ==========================================
 // 📊 SPIELER-AKTEN & STATISTIKEN 
