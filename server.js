@@ -370,9 +370,6 @@ app.post('/api/inventory/reset-all', (req, res) => {
 // ==========================================
 // 👑 ADMIN & MAP 
 // ==========================================
-// ==========================================
-// 👑 ADMIN & MAP (KORRIGIERTE VERSION)
-// ==========================================
 
 app.post('/api/admin/set-zone-special', (req, res) => {
     const { code, isKotH, hqTeam } = req.body;

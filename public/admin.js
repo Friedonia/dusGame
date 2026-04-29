@@ -954,6 +954,33 @@ window.adminPushTicket = function() {
     }
 };
 
+document.addEventListener("DOMContentLoaded", function() {
+    const menuBtn = document.getElementById("mobile-menu-btn");
+    const sidebar = document.getElementById("sidebar"); // ID anpassen, falls nötig
+
+    if (menuBtn && sidebar) {
+        menuBtn.addEventListener("click", function(e) {
+            e.stopPropagation(); // Verhindert, dass der Klick direkt an die Map weitergegeben wird
+            sidebar.classList.toggle("open");
+            
+            // Text des Buttons ändern
+            if (sidebar.classList.contains("open")) {
+                menuBtn.innerText = "✖ Schließen";
+            } else {
+                menuBtn.innerText = "☰ Menü";
+            }
+        });
+
+        // Optional: Sidebar schließen, wenn man auf die Karte klickt
+        document.getElementById("map").addEventListener("click", function() {
+            if (sidebar.classList.contains("open")) {
+                sidebar.classList.remove("open");
+                menuBtn.innerText = "☰ Menü";
+            }
+        });
+    }
+});
+
 
 // ==========================================
 // ⏳ LOKALES COOLDOWN TICKING (Ressourcen-schonend!)

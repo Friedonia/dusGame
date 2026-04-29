@@ -198,3 +198,83 @@ button { padding: 10px 20px; font-size: 14px; border: none; border-radius: 5px; 
 .leaflet-popup-close-button:hover {
     color: #ffffff !important;
 }
+
+/* ==========================================
+   📱 MOBILE OPTIMIERUNG (Responsive Design)
+   ========================================== */
+
+/* Versteckter Button, der nur auf Handys sichtbar wird */
+#mobile-menu-btn {
+    display: none;
+    position: fixed;
+    top: 15px;
+    right: 15px;
+    z-index: 9999;
+    background: #00ccff;
+    color: #fff;
+    border: none;
+    padding: 10px 15px;
+    font-size: 18px;
+    border-radius: 5px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    cursor: pointer;
+}
+
+@media (max-width: 768px) {
+    /* Zeige den Menü-Button auf dem Handy */
+    #mobile-menu-btn {
+        display: block;
+    }
+
+    /* Sidebar standardmäßig aus dem Bildschirm schieben */
+    #sidebar { /* Passe die ID an, falls deine Sidebar im HTML anders heißt (z.B. #panel) */
+        position: fixed;
+        right: -100%; /* Versteckt die Sidebar komplett rechts */
+        top: 0;
+        width: 80%; /* Sidebar nimmt 80% des Bildschirms ein */
+        max-width: 320px;
+        height: 100vh;
+        z-index: 9998;
+        background: #1e1e1e; /* Dunkler Hintergrund, falls nicht schon gesetzt */
+        transition: right 0.3s ease-in-out;
+        overflow-y: auto; /* Erlaubt Scrollen in der Sidebar */
+        box-shadow: -5px 0 15px rgba(0,0,0,0.5);
+    }
+
+    /* Klasse, die per JavaScript hinzugefügt wird, um die Sidebar anzuzeigen */
+    #sidebar.open {
+        right: 0;
+    }
+
+    /* 📌 Popups größer und touch-freundlicher machen */
+    .leaflet-popup-content-wrapper {
+        width: 85vw !important; /* Macht das Popup fast so breit wie den Bildschirm */
+        max-width: 350px;
+        border-radius: 12px;
+    }
+
+    .leaflet-popup-content {
+        font-size: 16px !important; /* Verhindert automatisches Zoomen bei iPhones (iOS Safari) */
+        margin: 15px !important;
+    }
+
+    /* Eingabefelder & Buttons im Popup vergrößern */
+    .leaflet-popup-content input, 
+    .leaflet-popup-content select, 
+    .leaflet-popup-content button {
+        width: 100%;
+        padding: 12px;
+        margin-top: 8px;
+        margin-bottom: 12px;
+        font-size: 16px; /* Wichtig für Mobile! */
+        box-sizing: border-box;
+        border-radius: 6px;
+    }
+    
+    .leaflet-popup-content button {
+        background-color: #00ccff;
+        color: white;
+        border: none;
+        font-weight: bold;
+    }
+}
